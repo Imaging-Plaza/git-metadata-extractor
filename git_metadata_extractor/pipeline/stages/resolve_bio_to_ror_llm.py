@@ -44,10 +44,13 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from git_metadata_extractor.agents.llm.agent_tools.ror_rag import make_ror_rag_search_tool
+from pydantic import Field
+
+from git_metadata_extractor.agents.llm.agent_tools.ror_rag import (
+    make_ror_rag_search_tool,
+)
 from git_metadata_extractor.agents.llm.refiners.bio_resolver import (
     CONFIDENCE_FLOOR,
     BioResolverAgent,
@@ -56,7 +59,7 @@ from git_metadata_extractor.agents.llm.refiners.bio_resolver import (
     UnresolvedPerson,
 )
 from git_metadata_extractor.agents.llm.runtime import LLMRuntimeError
-from git_metadata_extractor.providers.ror_rag import RorRagProvider
+from git_metadata_extractor.models import InternalModel
 from git_metadata_extractor.pipeline.stages.resolve_bio_to_ror import (
     BIO_KEYS,
     BLOG_KEYS,
@@ -66,10 +69,9 @@ from git_metadata_extractor.pipeline.stages.resolve_bio_to_ror import (
     _read_first,
 )
 from git_metadata_extractor.pipeline.stages.resolve_company_to_ror import (
-    _build_membership,
-    _build_org_stub,
     _existing_membership_keys,
     _existing_org_ids,
+    _materialise,
     _person_canonical_id,
 )
 
@@ -77,6 +79,7 @@ STAGE_SOURCE_TAG = "resolve_bio_to_ror_llm"
 
 if TYPE_CHECKING:
     from git_metadata_extractor.pipeline.stages.reconciliation import ReconciledEntities
+    from git_metadata_extractor.providers.ror_rag import RorRagProvider
 
 logger = logging.getLogger(__name__)
 
@@ -118,8 +121,7 @@ def _resolve_max_concurrency() -> int:
     return max(1, n)
 
 
-@dataclass(slots=True)
-class BioLLMAffiliationResult:
+class BioLLMAffiliationResult(InternalModel):
     """Summary of one stage run."""
 
     persons_examined: int
@@ -128,7 +130,7 @@ class BioLLMAffiliationResult:
     persons_failed: int
     memberships_created: int = 0
     organizations_created: int = 0
-    warnings: list[str] = field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
 
 
 def _read_name(person: dict[str, Any]) -> str | None:
@@ -206,36 +208,17 @@ def _apply_patch(
     person_id = _person_canonical_id(person)
     if not person_id:
         return 0, 0
-    composite = f"{person_id}__{patch.pulse_ror}"
-    if composite in existing_membership_keys:
-        return 0, 0
-
-    orgs = reconciled.entities.setdefault("organizations", [])
-    memberships = reconciled.entities.setdefault("memberships", [])
-    o_added = 0
-    if patch.pulse_ror not in existing_org_ids:
-        # We don't have a ROR `name` from the LLM patch — `reason`
-        # carries a verbatim bio quote that may or may not be the
-        # canonical name. Use the ROR URL itself so the Org stub is
-        # well-formed; downstream refiners can backfill `schema:name`.
-        stub = _build_org_stub(
-            {"ror_id": patch.pulse_ror, "name": patch.pulse_ror},
-            source=STAGE_SOURCE_TAG,
-        )
-        if stub is not None:
-            orgs.append(stub)
-            existing_org_ids.add(patch.pulse_ror)
-            o_added = 1
-
-    memberships.append(
-        _build_membership(
-            person_id=person_id,
-            org_id=patch.pulse_ror,
-            source=STAGE_SOURCE_TAG,
-        ),
+    # The patch has no canonical organization name; its reason is a bio quote.
+    # Reuse the accepted-hit writer so ROR validation and inverse links have
+    # the same contract as the deterministic affiliation producers.
+    return _materialise(
+        reconciled=reconciled,
+        person_id=person_id,
+        hits=[{"ror_id": patch.pulse_ror, "name": patch.pulse_ror}],
+        source=STAGE_SOURCE_TAG,
+        existing_org_ids=existing_org_ids,
+        existing_membership_keys=existing_membership_keys,
     )
-    existing_membership_keys.add(composite)
-    return 1, o_added
 
 
 async def run_resolve_bio_to_ror_llm_stage(

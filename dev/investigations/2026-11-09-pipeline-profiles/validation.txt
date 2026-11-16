@@ -1,0 +1,78 @@
+Pipeline profiles validation - 2026-11-09
+========================================
+
+Workspace: D:/pro/git-metadata-extractor-provenance
+Branch: feat/agent-evidence-provenance
+Base: 442e921a910379d9a24af3fca72bddac4f72ede5
+Local, uncommitted work; no push or service restart.
+
+Behavior and files
+------------------
+New git_metadata_extractor/experiments/{models,catalog,builtins,execution,
+benchmark,__main__}.py define YAML profiles, versioned collectors/agent
+factories, production extraction adapter and benchmark matrix CLI.
+config/pipelines/*.yaml and config/benchmarks/mock.json provide examples.
+justfile adds pipeline-list, pipeline-validate and pipeline-benchmark recipes.
+
+Integration changes: agents/registry.py accepts generic runtime runners;
+pipeline/orchestrator.py accepts plan overrides; agents/llm/runtime.py exposes
+task-scoped model overrides and captures model usage; observation/evidence.py
+exports usage; api/extract.py carries profile fingerprints and read-only state;
+api_models/contracts.py adds execution_profile; pipeline/run.py skips store
+writes for experiments; dependencies.py and providers/detection/
+github_url_classifier.py support provider-driven local account classification.
+
+Existing uncommitted provenance work is retained. This feature builds on it;
+the entire worktree diff also includes that earlier provenance implementation.
+
+Verification
+------------
+All Python runs used Docker image gme-local-validation:20261109, source bind
+mounted at /work/gme and --network none. Commands run from /work/gme:
+
+  python -m pytest tests/v2/test_pipeline_profiles.py tests/v2/test_benchmark_profiles.py -q --no-cov -p no:cacheprovider --tb=short
+  => 21 passed before final fingerprint regression extension.
+
+  python -m pytest tests/v2/test_pipeline_profiles.py -k effective_environment_model -q --no-cov -p no:cacheprovider --tb=short
+  => reproduced output-token-limit fingerprint collision before the fix.
+
+  python -m pytest tests/v2/ -q -n 4 --dist=loadfile -m "not live_provider and not llm_integration" --no-cov -p no:cacheprovider --tb=short
+  => 1832 passed, 1 skipped, 2496 warnings in 40.18 seconds.
+     Includes final fingerprint regression and all existing provenance tests.
+
+  ruff check git_metadata_extractor/experiments tests/v2/test_pipeline_profiles.py tests/v2/test_benchmark_profiles.py --ignore EXE002
+  => All checks passed. EXE002 excluded for Windows bind-mount executable bits.
+     This is scoped lint, not a claim that repository-wide lint debt is fixed.
+
+  git diff --check
+  => passed.
+
+  python -m git_metadata_extractor.experiments benchmark --profile config/pipelines/rule_based.yaml --profile config/pipelines/metadata_readme.yaml --corpus config/benchmarks/mock.json --output /artifacts/demo --repeats 2
+  => 4/4 cold-cache trials completed, zero pipeline hits, zero model calls.
+     Both variants: SHACL conformant; supplied name fact matched in every run.
+     Full collector: 4 entities, 25 triples; median 1.229 seconds.
+     Metadata+README: 3 entities, 18 triples; median 0.951 seconds.
+     These timings include concurrent test-suite load and are only smoke-test
+     observations, not performance rankings.
+
+Results: mock-comparison.json beside this file. Full artifacts (graphs,
+provenance, manifests, CSV, isolated caches) remain at:
+  D:/pro/git-metadata-extractor/.staging/profiles-benchmark-20261109/demo
+Test logs: D:/pro/git-metadata-extractor/.staging/profiles-full.txt
+
+Review addressed model/config fingerprint collisions, inherited model override
+isolation, live account probes in mock classification, canonical SHACL metric
+gating, and cleanup of owned async providers. Tests cover failed-trial retention,
+warm cache accounting, option validation, duplicate matrix names and skipped
+external writes.
+
+Limits and follow-ups
+---------------------
+Live hybrid/LLM trials were not run in this change. Expected-fact recall only
+covers labeled facts, not general extraction accuracy. Live source snapshots
+are not frozen. Custom components must bump their declared version on behavior
+changes and honor the runtime/read-only contracts. Existing auxiliary lookup
+stages attempted unavailable index services during the disconnected smoke test;
+those failures/warnings are visible in retained results. They did not abort
+the extractions. Windows has no just executable here, so equivalent Python
+commands were used directly. No secrets or secret-bearing files were modified.

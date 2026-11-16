@@ -1,0 +1,31 @@
+schema_version: 1
+name: agent.person
+version: '1'
+source_contract: prepared.agent.person
+target_contract: agent.person
+fields:
+  id: {sources: [id], empty: preserve, missing: 'null'}
+  type: {value: 'schema:Person', empty: preserve, missing: 'null'}
+  shacl: {value: 'pulse:PersonShape', empty: preserve, missing: 'null'}
+  identifiers.pulse:orcid: {sources: [identifiers_pulse_orcid], empty: preserve, missing: 'null'}
+  identifiers.pulse:infosciencePersonIdentifier:
+    sources: [identifiers_pulse_infosciencePersonIdentifier]
+    empty: preserve
+    missing: 'null'
+  identifiers.pulse:githubUsername:
+    sources: [identifiers_pulse_githubUsername]
+    empty: preserve
+    missing: 'null'
+  identifiers.uuid: {sources: [identifiers_uuid], empty: preserve, missing: 'null'}
+  idSource: {sources: [idSource], empty: preserve, missing: 'null'}
+  schema:name: {sources: [name], empty: preserve, missing: 'null'}
+  schema:url: {sources: [url], empty: preserve, missing: 'null'}
+  pulse:githubUsername: {sources: [githubUsername], empty: preserve, missing: 'null'}
+  pulse:orcidIdentifier: {sources: [orcidIdentifier], empty: preserve, missing: 'null'}
+  pulse:infosciencePersonIdentifier:
+    sources: [infosciencePersonIdentifier]
+    empty: preserve
+    missing: 'null'
+  org:hasMembership: {sources: [hasMembership], empty: preserve, missing: 'null'}
+  pulse:hasContribution: {sources: [hasContribution], empty: preserve, missing: 'null'}
+  pulse:owns: {sources: [owns], empty: preserve, missing: 'null'}

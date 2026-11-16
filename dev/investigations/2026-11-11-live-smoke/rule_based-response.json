@@ -1,0 +1,2802 @@
+{
+  "source_url": "https://github.com/sdsc-ordes/gimie",
+  "detected_type": "repository",
+  "output_format": "jsonld",
+  "output": {
+    "@context": {
+      "sh": "http://www.w3.org/ns/shacl#",
+      "xsd": "http://www.w3.org/2001/XMLSchema#",
+      "schema": "http://schema.org/",
+      "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
+      "rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
+      "org": "http://www.w3.org/ns/org#",
+      "time": "http://www.w3.org/2006/time#",
+      "pulse": "https://open-pulse.epfl.ch/ontology#",
+      "owl": "http://www.w3.org/2002/07/owl#",
+      "dct": "http://purl.org/dc/terms/",
+      "wd": "http://www.wikidata.org/entity/",
+      "skos": "http://www.w3.org/2004/02/skos/core#",
+      "schema:author": {
+        "@type": "@id",
+        "@container": "@set"
+      },
+      "schema:sourceOrganization": {
+        "@type": "@id"
+      },
+      "schema:url": {
+        "@type": "@id"
+      },
+      "schema:license": {
+        "@type": "@id"
+      },
+      "schema:citation": {
+        "@type": "@id"
+      },
+      "org:organization": {
+        "@type": "@id"
+      },
+      "org:hasMembership": {
+        "@type": "@id",
+        "@container": "@set"
+      },
+      "org:hasUnit": {
+        "@type": "@id",
+        "@container": "@set"
+      },
+      "org:unitOf": {
+        "@type": "@id"
+      },
+      "pulse:hasContribution": {
+        "@type": "@id",
+        "@container": "@set"
+      },
+      "pulse:contributionTo": {
+        "@type": "@id"
+      },
+      "pulse:owns": {
+        "@type": "@id",
+        "@container": "@set"
+      },
+      "pulse:ownedBy": {
+        "@type": "@id"
+      },
+      "pulse:isForkOf": {
+        "@type": "@id"
+      },
+      "affiliations": {
+        "@id": "pulse:affiliations",
+        "@type": "@id",
+        "@container": "@set"
+      },
+      "pulse:discipline": {
+        "@type": "@id",
+        "@container": "@set"
+      },
+      "pulse:repositoryType": {
+        "@type": "@id"
+      },
+      "pulse:OrganizationType": {
+        "@type": "@id"
+      },
+      "schema:dateCreated": {
+        "@type": "xsd:dateTime"
+      },
+      "schema:datePublished": {
+        "@type": "xsd:date"
+      },
+      "time:hasBeginning": {
+        "@type": "xsd:date"
+      },
+      "time:hasEnd": {
+        "@type": "xsd:date"
+      },
+      "pulse:firstContributionDate": {
+        "@type": "xsd:dateTime"
+      },
+      "pulse:lastContributionDate": {
+        "@type": "xsd:dateTime"
+      },
+      "pulse:contributionCount": {
+        "@type": "xsd:integer"
+      },
+      "pulse:githubRepoStars": {
+        "@type": "xsd:integer"
+      },
+      "pulse:githubRepoForks": {
+        "@type": "xsd:integer"
+      },
+      "pulse:githubOrgFollowers": {
+        "@type": "xsd:integer"
+      }
+    },
+    "@graph": [
+      {
+        "@id": "https://github.com/sdsc-ordes",
+        "@type": "schema:Person",
+        "schema:name": "sdsc-ordes",
+        "schema:url": null,
+        "pulse:githubUsername": "https://github.com/sdsc-ordes",
+        "pulse:orcidIdentifier": null,
+        "pulse:infosciencePersonIdentifier": null,
+        "org:hasMembership": [],
+        "pulse:hasContribution": [],
+        "pulse:owns": [
+          {
+            "@id": "https://github.com/sdsc-ordes/gimie"
+          }
+        ]
+      },
+      {
+        "@id": "https://github.com/sdsc-ordes/gimie",
+        "@type": "schema:SoftwareSourceCode",
+        "schema:name": "gimie",
+        "pulse:githubRepositoryHandle": "https://github.com/sdsc-ordes/gimie",
+        "schema:author": [
+          {
+            "@id": "https://github.com/sdsc-ordes"
+          }
+        ],
+        "pulse:githubRepoStars": 16,
+        "pulse:githubRepoForks": 3,
+        "schema:dateCreated": "2022-12-07T10:19:30Z",
+        "schema:license": {
+          "@id": "https://spdx.org/licenses/Apache-2.0.html"
+        },
+        "schema:citation": null,
+        "schema:programmingLanguage": [
+          "Python"
+        ],
+        "pulse:ownedBy": {
+          "@id": "https://github.com/sdsc-ordes"
+        },
+        "pulse:isForkOf": null,
+        "pulse:repositoryType": "pulse:Software",
+        "pulse:discipline": []
+      },
+      {
+        "@id": "https://github.com/sdsc-ordes__https://github.com/sdsc-ordes/gimie",
+        "@type": "pulse:Contribution",
+        "pulse:contributionTo": {
+          "@id": "https://github.com/sdsc-ordes/gimie"
+        },
+        "pulse:contributionCount": 1,
+        "pulse:firstContributionDate": null,
+        "pulse:lastContributionDate": null,
+        "schema:author": {
+          "@id": "https://github.com/sdsc-ordes"
+        }
+      }
+    ],
+    "excluded_entities": null
+  },
+  "context_summary_markdown": null,
+  "warnings": [
+    "Orphan person reference from repository author list: repo=https://github.com/sdsc-ordes/gimie, author=caviri",
+    "Orphan person reference from repository author list: repo=https://github.com/sdsc-ordes/gimie, author=cmdoret",
+    "Orphan person reference from repository author list: repo=https://github.com/sdsc-ordes/gimie, author=ksanao",
+    "Orphan person reference from repository author list: repo=https://github.com/sdsc-ordes/gimie, author=marftn",
+    "Orphan person reference from repository author list: repo=https://github.com/sdsc-ordes/gimie, author=raj921",
+    "Orphan person reference from repository author list: repo=https://github.com/sdsc-ordes/gimie, author=rmfranken",
+    "Orphan person reference from repository author list: repo=https://github.com/sdsc-ordes/gimie, author=sabinem",
+    "Orphan person reference from repository author list: repo=https://github.com/sdsc-ordes/gimie, author=sabrinaossey",
+    "Orphan person reference from repository author list: repo=https://github.com/sdsc-ordes/gimie, author=supermaxiste",
+    "Orphan person reference from repository author list: repo=https://github.com/sdsc-ordes/gimie, author=vancauwe",
+    "Orphan owner reference from repository: repo=https://github.com/sdsc-ordes/gimie, owner=https://github.com/sdsc-ordes",
+    "KNOWN BUG (schema:author empty after reconciliation): synthesized owner Person stub 'https://github.com/sdsc-ordes' as schema:author on https://github.com/sdsc-ordes/gimie (handle 'sdsc-ordes'). No matching Person or Organization existed in the graph \u2014 typical of solo-user repositories with no extracted contributor data.",
+    "Inferred pulse:owns on https://github.com/sdsc-ordes \u2192 https://github.com/sdsc-ordes/gimie (handle 'sdsc-ordes').",
+    "rule_based_disciplines: qdrant search failed \u2014 [Errno -2] Name or service not known"
+  ],
+  "stats": {
+    "entities_count": 3,
+    "triples_count": 19,
+    "run_id": "0552cfd5-fcd2-4131-bacf-220d83579093",
+    "duration_ms": 18985,
+    "stages_completed": [
+      "context_gather",
+      "repo_agent",
+      "permissive_validation",
+      "reconciliation",
+      "strict_validation",
+      "output_assembly",
+      "link_veracity",
+      "jsonld_build",
+      "shacl_gate"
+    ]
+  },
+  "extraction_run": {
+    "@graph": [
+      {
+        "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093",
+        "@type": "pulse:ExtractionRun",
+        "prov:endedAtTime": "2026-11-11T07:40:07.488203Z",
+        "prov:startedAtTime": "2026-11-11T07:39:44.140132Z",
+        "pulse:extractedBy": "urn:pulse:agent:git-metadata-extractor",
+        "pulse:extractionSeed": [
+          "https://github.com/sdsc-ordes/gimie"
+        ]
+      },
+      {
+        "@id": "urn:pulse:agent:git-metadata-extractor",
+        "@type": "prov:SoftwareAgent",
+        "schema:name": "git-metadata-extractor",
+        "schema:softwareVersion": "3.0.0"
+      }
+    ]
+  },
+  "provenance": {
+    "@context": {
+      "prov": "http://www.w3.org/ns/prov#",
+      "rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
+      "schema": "http://schema.org/",
+      "gme": "https://open-pulse.epfl.ch/extractor/provenance#",
+      "pulse": "https://open-pulse.epfl.ch/ontology#",
+      "org": "http://www.w3.org/ns/org#",
+      "time": "http://www.w3.org/2006/time#",
+      "sh": "http://www.w3.org/ns/shacl#",
+      "xsd": "http://www.w3.org/2001/XMLSchema#",
+      "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
+      "owl": "http://www.w3.org/2002/07/owl#",
+      "dct": "http://purl.org/dc/terms/",
+      "wd": "http://www.wikidata.org/entity/",
+      "skos": "http://www.w3.org/2004/02/skos/core#",
+      "schema:author": {
+        "@type": "@id",
+        "@container": "@set"
+      },
+      "schema:sourceOrganization": {
+        "@type": "@id"
+      },
+      "schema:url": {
+        "@type": "@id"
+      },
+      "schema:license": {
+        "@type": "@id"
+      },
+      "schema:citation": {
+        "@type": "@id"
+      },
+      "org:organization": {
+        "@type": "@id"
+      },
+      "org:hasMembership": {
+        "@type": "@id",
+        "@container": "@set"
+      },
+      "org:hasUnit": {
+        "@type": "@id",
+        "@container": "@set"
+      },
+      "org:unitOf": {
+        "@type": "@id"
+      },
+      "pulse:hasContribution": {
+        "@type": "@id",
+        "@container": "@set"
+      },
+      "pulse:contributionTo": {
+        "@type": "@id"
+      },
+      "pulse:owns": {
+        "@type": "@id",
+        "@container": "@set"
+      },
+      "pulse:ownedBy": {
+        "@type": "@id"
+      },
+      "pulse:isForkOf": {
+        "@type": "@id"
+      },
+      "affiliations": {
+        "@id": "pulse:affiliations",
+        "@type": "@id",
+        "@container": "@set"
+      },
+      "pulse:discipline": {
+        "@type": "@id",
+        "@container": "@set"
+      },
+      "pulse:repositoryType": {
+        "@type": "@id"
+      },
+      "pulse:OrganizationType": {
+        "@type": "@id"
+      },
+      "schema:dateCreated": {
+        "@type": "xsd:dateTime"
+      },
+      "schema:datePublished": {
+        "@type": "xsd:date"
+      },
+      "time:hasBeginning": {
+        "@type": "xsd:date"
+      },
+      "time:hasEnd": {
+        "@type": "xsd:date"
+      },
+      "pulse:firstContributionDate": {
+        "@type": "xsd:dateTime"
+      },
+      "pulse:lastContributionDate": {
+        "@type": "xsd:dateTime"
+      },
+      "pulse:contributionCount": {
+        "@type": "xsd:integer"
+      },
+      "pulse:githubRepoStars": {
+        "@type": "xsd:integer"
+      },
+      "pulse:githubRepoForks": {
+        "@type": "xsd:integer"
+      },
+      "pulse:githubOrgFollowers": {
+        "@type": "xsd:integer"
+      }
+    },
+    "@graph": [
+      {
+        "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:activity:fbffaf22-4f7e-445c-9c6c-d3fe8f68fea2",
+        "@type": "prov:Activity",
+        "schema:name": "context_gather",
+        "gme:kind": "retrieval",
+        "gme:status": "success",
+        "prov:startedAtTime": "2026-11-11T07:39:44.140256+00:00",
+        "prov:wasInformedBy": {
+          "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093"
+        },
+        "prov:endedAtTime": "2026-11-11T07:40:03.113158+00:00",
+        "prov:wasAssociatedWith": {
+          "@id": "urn:pulse:software-agent:2739a75eecc398d8fef35de155354103640776b8b43fb057651fc14ea0919458"
+        }
+      },
+      {
+        "@id": "urn:pulse:software-agent:2739a75eecc398d8fef35de155354103640776b8b43fb057651fc14ea0919458",
+        "@type": "prov:Agent",
+        "schema:name": "context_gather"
+      },
+      {
+        "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:activity:3a109b59-c9ea-4a0d-bd0a-efa4cc8a2f7a",
+        "@type": "prov:Activity",
+        "schema:name": "collector:github.context@1",
+        "gme:kind": "retrieval",
+        "gme:status": "success",
+        "prov:startedAtTime": "2026-11-11T07:39:44.140292+00:00",
+        "prov:wasInformedBy": {
+          "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:activity:fbffaf22-4f7e-445c-9c6c-d3fe8f68fea2"
+        },
+        "prov:endedAtTime": "2026-11-11T07:40:03.112999+00:00",
+        "prov:wasAssociatedWith": {
+          "@id": "urn:pulse:software-agent:4c1c071cbba3c1ef67de50747530c17281cc55e2330cb06fb41c8abfa037778a"
+        }
+      },
+      {
+        "@id": "urn:pulse:software-agent:4c1c071cbba3c1ef67de50747530c17281cc55e2330cb06fb41c8abfa037778a",
+        "@type": "prov:Agent",
+        "schema:name": "collector:github.context@1"
+      },
+      {
+        "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:activity:c9fdd33f-3831-43cd-86da-88486f233754",
+        "@type": "prov:Activity",
+        "schema:name": "rule_based.repository@1",
+        "gme:kind": "rule_based",
+        "gme:status": "success",
+        "prov:startedAtTime": "2026-11-11T07:40:03.113462+00:00",
+        "prov:wasInformedBy": {
+          "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093"
+        },
+        "prov:endedAtTime": "2026-11-11T07:40:03.123618+00:00",
+        "prov:wasAssociatedWith": {
+          "@id": "urn:pulse:software-agent:4652cca33554e7849feebe00ac1bac0f17ec2a45e9eeb9625cd088c3e4301ec3"
+        }
+      },
+      {
+        "@id": "urn:pulse:software-agent:4652cca33554e7849feebe00ac1bac0f17ec2a45e9eeb9625cd088c3e4301ec3",
+        "@type": "prov:Agent",
+        "schema:name": "rule_based.repository@1"
+      },
+      {
+        "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:activity:d29ed2bd-49ef-45f9-b9a6-4972e82b4f76",
+        "@type": "prov:Activity",
+        "schema:name": "agent:rule_based.repository@1",
+        "gme:kind": "rule_based",
+        "gme:status": "success",
+        "prov:startedAtTime": "2026-11-11T07:40:03.113477+00:00",
+        "prov:wasInformedBy": {
+          "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:activity:c9fdd33f-3831-43cd-86da-88486f233754"
+        },
+        "prov:endedAtTime": "2026-11-11T07:40:03.123568+00:00",
+        "prov:wasAssociatedWith": {
+          "@id": "urn:pulse:software-agent:505cd9e70ba5be78bb683113bea769b7a8a9e585762e6bfa05620aca36e01fd0"
+        }
+      },
+      {
+        "@id": "urn:pulse:software-agent:505cd9e70ba5be78bb683113bea769b7a8a9e585762e6bfa05620aca36e01fd0",
+        "@type": "prov:Agent",
+        "schema:name": "agent:rule_based.repository@1"
+      },
+      {
+        "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:activity:75352342-4b90-4e4d-9f85-0980ebb309fe",
+        "@type": "prov:Activity",
+        "schema:name": "permissive_validation",
+        "gme:kind": "transformation",
+        "gme:status": "success",
+        "prov:startedAtTime": "2026-11-11T07:40:03.124106+00:00",
+        "prov:wasInformedBy": {
+          "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093"
+        },
+        "prov:endedAtTime": "2026-11-11T07:40:03.124197+00:00",
+        "prov:wasAssociatedWith": {
+          "@id": "urn:pulse:software-agent:a6750f2bdd464566833efe3fa563ee3b9f57907bdac6125daef98e32eabf9353"
+        }
+      },
+      {
+        "@id": "urn:pulse:software-agent:a6750f2bdd464566833efe3fa563ee3b9f57907bdac6125daef98e32eabf9353",
+        "@type": "prov:Agent",
+        "schema:name": "permissive_validation"
+      },
+      {
+        "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:activity:5fd709f1-102d-4db6-8fd1-bd6bfad83a32",
+        "@type": "prov:Activity",
+        "schema:name": "reconciliation",
+        "gme:kind": "transformation",
+        "gme:status": "success",
+        "prov:startedAtTime": "2026-11-11T07:40:03.124225+00:00",
+        "prov:wasInformedBy": {
+          "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093"
+        },
+        "prov:endedAtTime": "2026-11-11T07:40:03.124653+00:00",
+        "prov:wasAssociatedWith": {
+          "@id": "urn:pulse:software-agent:38cf3bfc475ff40a5ff2aaf043a4ea7290551df82238601f5b308e6335286a46"
+        }
+      },
+      {
+        "@id": "urn:pulse:software-agent:38cf3bfc475ff40a5ff2aaf043a4ea7290551df82238601f5b308e6335286a46",
+        "@type": "prov:Agent",
+        "schema:name": "reconciliation"
+      },
+      {
+        "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:activity:72d7dd8d-fbdf-4ccf-b08b-12b709af9789",
+        "@type": "prov:Activity",
+        "schema:name": "resolve_company_to_ror",
+        "gme:kind": "transformation",
+        "gme:status": "success",
+        "prov:startedAtTime": "2026-11-11T07:40:03.124689+00:00",
+        "prov:wasInformedBy": {
+          "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093"
+        },
+        "prov:endedAtTime": "2026-11-11T07:40:03.146211+00:00",
+        "prov:wasAssociatedWith": {
+          "@id": "urn:pulse:software-agent:2984b5794345d1ccb30c388414fc65ea3b1dcea25bf25654fac8c4bdb6feddf3"
+        }
+      },
+      {
+        "@id": "urn:pulse:software-agent:2984b5794345d1ccb30c388414fc65ea3b1dcea25bf25654fac8c4bdb6feddf3",
+        "@type": "prov:Agent",
+        "schema:name": "resolve_company_to_ror"
+      },
+      {
+        "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:activity:0eca86ee-2559-48ac-8d6f-82af4c8bc1fe",
+        "@type": "prov:Activity",
+        "schema:name": "resolve_bio_to_ror",
+        "gme:kind": "transformation",
+        "gme:status": "success",
+        "prov:startedAtTime": "2026-11-11T07:40:03.146270+00:00",
+        "prov:wasInformedBy": {
+          "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093"
+        },
+        "prov:endedAtTime": "2026-11-11T07:40:03.161213+00:00",
+        "prov:wasAssociatedWith": {
+          "@id": "urn:pulse:software-agent:a3b22abf44a31bc26fec02e586c32cddbf97fba8c989d659458e42924c99e29f"
+        }
+      },
+      {
+        "@id": "urn:pulse:software-agent:a3b22abf44a31bc26fec02e586c32cddbf97fba8c989d659458e42924c99e29f",
+        "@type": "prov:Agent",
+        "schema:name": "resolve_bio_to_ror"
+      },
+      {
+        "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:activity:97801739-34cc-40ac-860a-9e5665aaa772",
+        "@type": "prov:Activity",
+        "schema:name": "resolve_placeholder_orgs_to_ror",
+        "gme:kind": "transformation",
+        "gme:status": "success",
+        "prov:startedAtTime": "2026-11-11T07:40:03.161282+00:00",
+        "prov:wasInformedBy": {
+          "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093"
+        },
+        "prov:endedAtTime": "2026-11-11T07:40:03.176363+00:00",
+        "prov:wasAssociatedWith": {
+          "@id": "urn:pulse:software-agent:45e1fea0a9de6fea2f62d2ae02fbfde25d893f1be56d9d9a8e4192c523e73eef"
+        }
+      },
+      {
+        "@id": "urn:pulse:software-agent:45e1fea0a9de6fea2f62d2ae02fbfde25d893f1be56d9d9a8e4192c523e73eef",
+        "@type": "prov:Agent",
+        "schema:name": "resolve_placeholder_orgs_to_ror"
+      },
+      {
+        "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:activity:4406e294-5d52-4219-98b0-8d0324cd75a8",
+        "@type": "prov:Activity",
+        "schema:name": "guarantee_repo_author",
+        "gme:kind": "transformation",
+        "gme:status": "success",
+        "prov:startedAtTime": "2026-11-11T07:40:03.176447+00:00",
+        "prov:wasInformedBy": {
+          "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093"
+        },
+        "prov:endedAtTime": "2026-11-11T07:40:03.176831+00:00",
+        "prov:wasAssociatedWith": {
+          "@id": "urn:pulse:software-agent:1b40b62db197781719326aded61a1e9b09e7c06d308d161fab2b82cd60a7835d"
+        }
+      },
+      {
+        "@id": "urn:pulse:software-agent:1b40b62db197781719326aded61a1e9b09e7c06d308d161fab2b82cd60a7835d",
+        "@type": "prov:Agent",
+        "schema:name": "guarantee_repo_author"
+      },
+      {
+        "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:activity:a6b83a9f-7434-4505-a068-5387f3418f4b",
+        "@type": "prov:Activity",
+        "schema:name": "validate_org_github_handles",
+        "gme:kind": "transformation",
+        "gme:status": "success",
+        "prov:startedAtTime": "2026-11-11T07:40:03.176846+00:00",
+        "prov:wasInformedBy": {
+          "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093"
+        },
+        "prov:endedAtTime": "2026-11-11T07:40:03.176891+00:00",
+        "prov:wasAssociatedWith": {
+          "@id": "urn:pulse:software-agent:12076f3f5e60fe60a02b21ab9ff34839cc5a0fb8c89b7db72e569f30443dfebb"
+        }
+      },
+      {
+        "@id": "urn:pulse:software-agent:12076f3f5e60fe60a02b21ab9ff34839cc5a0fb8c89b7db72e569f30443dfebb",
+        "@type": "prov:Agent",
+        "schema:name": "validate_org_github_handles"
+      },
+      {
+        "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:activity:85a70a17-4d36-4d58-813b-95c101600bd6",
+        "@type": "prov:Activity",
+        "schema:name": "strict_validation",
+        "gme:kind": "transformation",
+        "gme:status": "success",
+        "prov:startedAtTime": "2026-11-11T07:40:03.179789+00:00",
+        "prov:wasInformedBy": {
+          "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093"
+        },
+        "prov:endedAtTime": "2026-11-11T07:40:03.200118+00:00",
+        "prov:wasAssociatedWith": {
+          "@id": "urn:pulse:software-agent:05fc600545f270e9fdde8e48cf1999e4c907ceae3a954531e65c970010f465e3"
+        }
+      },
+      {
+        "@id": "urn:pulse:software-agent:05fc600545f270e9fdde8e48cf1999e4c907ceae3a954531e65c970010f465e3",
+        "@type": "prov:Agent",
+        "schema:name": "strict_validation"
+      },
+      {
+        "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:activity:2b72398a-5bde-4c00-a071-0776b1c95636",
+        "@type": "prov:Activity",
+        "schema:name": "output_assembly",
+        "gme:kind": "transformation",
+        "gme:status": "success",
+        "prov:startedAtTime": "2026-11-11T07:40:03.200177+00:00",
+        "prov:wasInformedBy": {
+          "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093"
+        },
+        "prov:endedAtTime": "2026-11-11T07:40:03.200511+00:00",
+        "prov:wasAssociatedWith": {
+          "@id": "urn:pulse:software-agent:8aa8e98e41507638a4f8a931eaba7985da249a96f4aff43a80131ba4b1f0c9cb"
+        }
+      },
+      {
+        "@id": "urn:pulse:software-agent:8aa8e98e41507638a4f8a931eaba7985da249a96f4aff43a80131ba4b1f0c9cb",
+        "@type": "prov:Agent",
+        "schema:name": "output_assembly"
+      },
+      {
+        "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:activity:1c055989-bd73-467c-8fa8-c1cd7d0519bb",
+        "@type": "prov:Activity",
+        "schema:name": "critic_exclusions",
+        "gme:kind": "transformation",
+        "gme:status": "success",
+        "prov:startedAtTime": "2026-11-11T07:40:03.200539+00:00",
+        "prov:wasInformedBy": {
+          "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093"
+        },
+        "prov:endedAtTime": "2026-11-11T07:40:03.200581+00:00",
+        "prov:wasAssociatedWith": {
+          "@id": "urn:pulse:software-agent:c47f8dd975c279c70d19822cea6c1654fbdfe7a8644cd57cd71f8207ea4c1c00"
+        }
+      },
+      {
+        "@id": "urn:pulse:software-agent:c47f8dd975c279c70d19822cea6c1654fbdfe7a8644cd57cd71f8207ea4c1c00",
+        "@type": "prov:Agent",
+        "schema:name": "critic_exclusions"
+      },
+      {
+        "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:activity:728c9640-692b-4620-9292-e374d177cdbc",
+        "@type": "prov:Activity",
+        "schema:name": "assembled_warnings",
+        "gme:kind": "transformation",
+        "gme:status": "success",
+        "prov:startedAtTime": "2026-11-11T07:40:03.200591+00:00",
+        "prov:wasInformedBy": {
+          "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093"
+        },
+        "prov:endedAtTime": "2026-11-11T07:40:03.200630+00:00",
+        "prov:wasAssociatedWith": {
+          "@id": "urn:pulse:software-agent:f197415193362a6b06d35d1e4e681afb4be04906bae9b5d61285223df3f9486a"
+        }
+      },
+      {
+        "@id": "urn:pulse:software-agent:f197415193362a6b06d35d1e4e681afb4be04906bae9b5d61285223df3f9486a",
+        "@type": "prov:Agent",
+        "schema:name": "assembled_warnings"
+      },
+      {
+        "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:activity:61a1bc96-1c11-4df3-9726-e9ade74ae986",
+        "@type": "prov:Activity",
+        "schema:name": "link_veracity_start",
+        "gme:kind": "transformation",
+        "gme:status": "success",
+        "prov:startedAtTime": "2026-11-11T07:40:03.200638+00:00",
+        "prov:wasInformedBy": {
+          "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093"
+        },
+        "prov:endedAtTime": "2026-11-11T07:40:03.200679+00:00",
+        "prov:wasAssociatedWith": {
+          "@id": "urn:pulse:software-agent:d3be3af5898a6ef98c115dbbea536e1548cb6772f1b97fa7138c4ff0c17d10f7"
+        }
+      },
+      {
+        "@id": "urn:pulse:software-agent:d3be3af5898a6ef98c115dbbea536e1548cb6772f1b97fa7138c4ff0c17d10f7",
+        "@type": "prov:Agent",
+        "schema:name": "link_veracity_start"
+      },
+      {
+        "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:activity:c6fa747d-094c-46f0-96cb-2e8e722702e3",
+        "@type": "prov:Activity",
+        "schema:name": "validate_articles",
+        "gme:kind": "transformation",
+        "gme:status": "success",
+        "prov:startedAtTime": "2026-11-11T07:40:03.200697+00:00",
+        "prov:wasInformedBy": {
+          "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093"
+        },
+        "prov:endedAtTime": "2026-11-11T07:40:03.200751+00:00",
+        "prov:wasAssociatedWith": {
+          "@id": "urn:pulse:software-agent:91dd0ba88919af1047bef557b568df8616c693606dc120f2fdf4903e257e37b0"
+        }
+      },
+      {
+        "@id": "urn:pulse:software-agent:91dd0ba88919af1047bef557b568df8616c693606dc120f2fdf4903e257e37b0",
+        "@type": "prov:Agent",
+        "schema:name": "validate_articles"
+      },
+      {
+        "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:activity:1d366884-d90e-4f87-9075-70976000ad34",
+        "@type": "prov:Activity",
+        "schema:name": "author_class_validation",
+        "gme:kind": "transformation",
+        "gme:status": "success",
+        "prov:startedAtTime": "2026-11-11T07:40:03.200759+00:00",
+        "prov:wasInformedBy": {
+          "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093"
+        },
+        "prov:endedAtTime": "2026-11-11T07:40:03.200935+00:00",
+        "prov:wasAssociatedWith": {
+          "@id": "urn:pulse:software-agent:3722a2cd62b10e21a52d752b7b6055b6473a32060532d34af11e843cd10a92d4"
+        }
+      },
+      {
+        "@id": "urn:pulse:software-agent:3722a2cd62b10e21a52d752b7b6055b6473a32060532d34af11e843cd10a92d4",
+        "@type": "prov:Agent",
+        "schema:name": "author_class_validation"
+      },
+      {
+        "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:activity:101a8744-28cb-48d1-996a-2e91c05d97fc",
+        "@type": "prov:Activity",
+        "schema:name": "link_veracity_seconds",
+        "gme:kind": "transformation",
+        "gme:status": "success",
+        "prov:startedAtTime": "2026-11-11T07:40:03.200943+00:00",
+        "prov:wasInformedBy": {
+          "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093"
+        },
+        "prov:endedAtTime": "2026-11-11T07:40:03.200985+00:00",
+        "prov:wasAssociatedWith": {
+          "@id": "urn:pulse:software-agent:6712f8d37cf4e4abb42e9006388c6a475bc583729c9c74f6f8df9e92511d4c31"
+        }
+      },
+      {
+        "@id": "urn:pulse:software-agent:6712f8d37cf4e4abb42e9006388c6a475bc583729c9c74f6f8df9e92511d4c31",
+        "@type": "prov:Agent",
+        "schema:name": "link_veracity_seconds"
+      },
+      {
+        "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:activity:fefb9ab1-84a9-4a00-b23d-6f26ff85c56b",
+        "@type": "prov:Activity",
+        "schema:name": "ownership_check",
+        "gme:kind": "transformation",
+        "gme:status": "success",
+        "prov:startedAtTime": "2026-11-11T07:40:03.200992+00:00",
+        "prov:wasInformedBy": {
+          "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093"
+        },
+        "prov:endedAtTime": "2026-11-11T07:40:03.201177+00:00",
+        "prov:wasAssociatedWith": {
+          "@id": "urn:pulse:software-agent:933173969cff212399bdc802f4cda5a5de9b7784108ff9a1cb9986d7d78f25f8"
+        }
+      },
+      {
+        "@id": "urn:pulse:software-agent:933173969cff212399bdc802f4cda5a5de9b7784108ff9a1cb9986d7d78f25f8",
+        "@type": "prov:Agent",
+        "schema:name": "ownership_check"
+      },
+      {
+        "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:activity:bf665b6c-1302-4cb2-b457-a9aced4bf333",
+        "@type": "prov:Activity",
+        "schema:name": "owner_inference",
+        "gme:kind": "transformation",
+        "gme:status": "success",
+        "prov:startedAtTime": "2026-11-11T07:40:03.201186+00:00",
+        "prov:wasInformedBy": {
+          "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093"
+        },
+        "prov:endedAtTime": "2026-11-11T07:40:03.201376+00:00",
+        "prov:wasAssociatedWith": {
+          "@id": "urn:pulse:software-agent:d87776e5b6a6d1e52212155036b35ad6d52f7144391c001986457190960b84e7"
+        }
+      },
+      {
+        "@id": "urn:pulse:software-agent:d87776e5b6a6d1e52212155036b35ad6d52f7144391c001986457190960b84e7",
+        "@type": "prov:Agent",
+        "schema:name": "owner_inference"
+      },
+      {
+        "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:activity:51d09204-3d79-4e86-a33a-e8c24e41dfe5",
+        "@type": "prov:Activity",
+        "schema:name": "inverse_consistency",
+        "gme:kind": "transformation",
+        "gme:status": "success",
+        "prov:startedAtTime": "2026-11-11T07:40:03.201384+00:00",
+        "prov:wasInformedBy": {
+          "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093"
+        },
+        "prov:endedAtTime": "2026-11-11T07:40:03.201545+00:00",
+        "prov:wasAssociatedWith": {
+          "@id": "urn:pulse:software-agent:f175bc061766a2eb01476ff8d1ee6ecfe286d17930cb9fd7592325bed42baf08"
+        }
+      },
+      {
+        "@id": "urn:pulse:software-agent:f175bc061766a2eb01476ff8d1ee6ecfe286d17930cb9fd7592325bed42baf08",
+        "@type": "prov:Agent",
+        "schema:name": "inverse_consistency"
+      },
+      {
+        "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:activity:adb84841-dfb3-4456-bf4a-cdf9c55e9033",
+        "@type": "prov:Activity",
+        "schema:name": "prune_dangling_refs",
+        "gme:kind": "transformation",
+        "gme:status": "success",
+        "prov:startedAtTime": "2026-11-11T07:40:03.201553+00:00",
+        "prov:wasInformedBy": {
+          "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093"
+        },
+        "prov:endedAtTime": "2026-11-11T07:40:03.201784+00:00",
+        "prov:wasAssociatedWith": {
+          "@id": "urn:pulse:software-agent:b8e96c33bb434d26eafff3cd1bc1201c7874a6a1da6d54042cd4cd7225de6d22"
+        }
+      },
+      {
+        "@id": "urn:pulse:software-agent:b8e96c33bb434d26eafff3cd1bc1201c7874a6a1da6d54042cd4cd7225de6d22",
+        "@type": "prov:Agent",
+        "schema:name": "prune_dangling_refs"
+      },
+      {
+        "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:activity:2dda0924-a349-4b02-8474-443c6031cf2f",
+        "@type": "prov:Activity",
+        "schema:name": "github_handle_parents",
+        "gme:kind": "transformation",
+        "gme:status": "success",
+        "prov:startedAtTime": "2026-11-11T07:40:03.201806+00:00",
+        "prov:wasInformedBy": {
+          "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093"
+        },
+        "prov:endedAtTime": "2026-11-11T07:40:03.201973+00:00",
+        "prov:wasAssociatedWith": {
+          "@id": "urn:pulse:software-agent:57acae842f4ce9afe5df91c548648f02d49cffa140c08da900e37cb4f80acc1c"
+        }
+      },
+      {
+        "@id": "urn:pulse:software-agent:57acae842f4ce9afe5df91c548648f02d49cffa140c08da900e37cb4f80acc1c",
+        "@type": "prov:Agent",
+        "schema:name": "github_handle_parents"
+      },
+      {
+        "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:activity:e6c2a4e7-6008-420f-87fb-1cd368dad441",
+        "@type": "prov:Activity",
+        "schema:name": "org_unit_inference",
+        "gme:kind": "transformation",
+        "gme:status": "success",
+        "prov:startedAtTime": "2026-11-11T07:40:03.201986+00:00",
+        "prov:wasInformedBy": {
+          "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093"
+        },
+        "prov:endedAtTime": "2026-11-11T07:40:03.202140+00:00",
+        "prov:wasAssociatedWith": {
+          "@id": "urn:pulse:software-agent:54b080c0e876a42c11e911ae494a17251ef8848a4c821776f415b418b488506b"
+        }
+      },
+      {
+        "@id": "urn:pulse:software-agent:54b080c0e876a42c11e911ae494a17251ef8848a4c821776f415b418b488506b",
+        "@type": "prov:Agent",
+        "schema:name": "org_unit_inference"
+      },
+      {
+        "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:activity:2f261889-a365-42e8-b421-ff4193be5c6f",
+        "@type": "prov:Activity",
+        "schema:name": "demote_github_props_to_units",
+        "gme:kind": "transformation",
+        "gme:status": "success",
+        "prov:startedAtTime": "2026-11-11T07:40:03.202148+00:00",
+        "prov:wasInformedBy": {
+          "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093"
+        },
+        "prov:endedAtTime": "2026-11-11T07:40:03.202297+00:00",
+        "prov:wasAssociatedWith": {
+          "@id": "urn:pulse:software-agent:cfdb03b94c7305c153541b020e16863812bd3e887d9efeea180c13d3daf7a31f"
+        }
+      },
+      {
+        "@id": "urn:pulse:software-agent:cfdb03b94c7305c153541b020e16863812bd3e887d9efeea180c13d3daf7a31f",
+        "@type": "prov:Agent",
+        "schema:name": "demote_github_props_to_units"
+      },
+      {
+        "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:activity:87eb1fa5-7e0e-4de4-9c69-7347eafb6501",
+        "@type": "prov:Activity",
+        "schema:name": "fork_parent_stubs",
+        "gme:kind": "transformation",
+        "gme:status": "success",
+        "prov:startedAtTime": "2026-11-11T07:40:03.202305+00:00",
+        "prov:wasInformedBy": {
+          "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093"
+        },
+        "prov:endedAtTime": "2026-11-11T07:40:03.202457+00:00",
+        "prov:wasAssociatedWith": {
+          "@id": "urn:pulse:software-agent:048d87e99a8747176e42597e45b36c3a7178b27893c7ef3148ee117c2bf1d5a8"
+        }
+      },
+      {
+        "@id": "urn:pulse:software-agent:048d87e99a8747176e42597e45b36c3a7178b27893c7ef3148ee117c2bf1d5a8",
+        "@type": "prov:Agent",
+        "schema:name": "fork_parent_stubs"
+      },
+      {
+        "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:activity:aec86fc7-e880-4e28-a967-6f960143b153",
+        "@type": "prov:Activity",
+        "schema:name": "article_source_org_inference",
+        "gme:kind": "transformation",
+        "gme:status": "success",
+        "prov:startedAtTime": "2026-11-11T07:40:03.202465+00:00",
+        "prov:wasInformedBy": {
+          "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093"
+        },
+        "prov:endedAtTime": "2026-11-11T07:40:03.202619+00:00",
+        "prov:wasAssociatedWith": {
+          "@id": "urn:pulse:software-agent:a21cbb4c82d98a34bc3fd9e759e857a96596b0811002434252505ceb8315a780"
+        }
+      },
+      {
+        "@id": "urn:pulse:software-agent:a21cbb4c82d98a34bc3fd9e759e857a96596b0811002434252505ceb8315a780",
+        "@type": "prov:Agent",
+        "schema:name": "article_source_org_inference"
+      },
+      {
+        "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:activity:5f75caa9-ab4e-4c09-ac44-f389922ab201",
+        "@type": "prov:Activity",
+        "schema:name": "rule_based_disciplines",
+        "gme:kind": "transformation",
+        "gme:status": "success",
+        "prov:startedAtTime": "2026-11-11T07:40:03.202632+00:00",
+        "prov:wasInformedBy": {
+          "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093"
+        },
+        "prov:endedAtTime": "2026-11-11T07:40:07.198349+00:00",
+        "prov:wasAssociatedWith": {
+          "@id": "urn:pulse:software-agent:3ab3015dbb95c49fa66228e35792d74efb7a98e1288cf29d6f3b358721b032d1"
+        }
+      },
+      {
+        "@id": "urn:pulse:software-agent:3ab3015dbb95c49fa66228e35792d74efb7a98e1288cf29d6f3b358721b032d1",
+        "@type": "prov:Agent",
+        "schema:name": "rule_based_disciplines"
+      },
+      {
+        "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:activity:49a0b713-e3fa-42e7-bbd6-33d9708ab11b",
+        "@type": "prov:Activity",
+        "schema:name": "jsonld_build",
+        "gme:kind": "transformation",
+        "gme:status": "success",
+        "prov:startedAtTime": "2026-11-11T07:40:07.198435+00:00",
+        "prov:wasInformedBy": {
+          "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093"
+        },
+        "prov:endedAtTime": "2026-11-11T07:40:07.198626+00:00",
+        "prov:wasAssociatedWith": {
+          "@id": "urn:pulse:software-agent:8fca4b62dcaac6870036462faf957b140b14650af822f12f05c84c3c05244f5c"
+        }
+      },
+      {
+        "@id": "urn:pulse:software-agent:8fca4b62dcaac6870036462faf957b140b14650af822f12f05c84c3c05244f5c",
+        "@type": "prov:Agent",
+        "schema:name": "jsonld_build"
+      },
+      {
+        "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:activity:f3f59d74-84c0-45f6-a05c-972bb8425924",
+        "@type": "prov:Activity",
+        "schema:name": "shacl_gate",
+        "gme:kind": "transformation",
+        "gme:status": "success",
+        "prov:startedAtTime": "2026-11-11T07:40:07.198657+00:00",
+        "prov:wasInformedBy": {
+          "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093"
+        },
+        "prov:endedAtTime": "2026-11-11T07:40:07.458216+00:00",
+        "prov:wasAssociatedWith": {
+          "@id": "urn:pulse:software-agent:dfaa26bff92adc531c7a47d3a15e4d003d8fc355c704bbc7f8d93d71028c74fc"
+        }
+      },
+      {
+        "@id": "urn:pulse:software-agent:dfaa26bff92adc531c7a47d3a15e4d003d8fc355c704bbc7f8d93d71028c74fc",
+        "@type": "prov:Agent",
+        "schema:name": "shacl_gate"
+      },
+      {
+        "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:query:8a24782d-e207-495f-a98b-e0e00e3a8de0",
+        "@type": [
+          "prov:Activity",
+          "gme:Retrieval"
+        ],
+        "gme:service": "github.get_repository",
+        "gme:status": "success",
+        "gme:arguments": {
+          "@value": {
+            "full_name": "sdsc-ordes/gimie"
+          },
+          "@type": "@json"
+        },
+        "gme:source": [
+          {
+            "@id": "https://api.github.com/licenses/apache-2.0"
+          },
+          {
+            "@id": "https://github.com/sdsc-ordes"
+          },
+          {
+            "@id": "https://github.com/sdsc-ordes/gimie"
+          }
+        ],
+        "prov:startedAtTime": "2026-11-11T07:39:44.140652+00:00",
+        "gme:cache_hit": false,
+        "prov:endedAtTime": "2026-11-11T07:39:49.662016+00:00",
+        "prov:wasInformedBy": {
+          "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:activity:3a109b59-c9ea-4a0d-bd0a-efa4cc8a2f7a"
+        },
+        "gme:resultDigest": "5209988dd64c9f6cf673007d2bbbf7d78f8de0447cef7bb8748a96c06031fcad"
+      },
+      {
+        "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:query:e3bce333-14f2-4ef6-be9d-f42d5e6de92b",
+        "@type": [
+          "prov:Activity",
+          "gme:Retrieval"
+        ],
+        "gme:service": "github.get_contributors",
+        "gme:status": "success",
+        "gme:arguments": {
+          "@value": {
+            "full_name": "sdsc-ordes/gimie"
+          },
+          "@type": "@json"
+        },
+        "gme:source": [],
+        "prov:startedAtTime": "2026-11-11T07:39:49.662941+00:00",
+        "gme:cache_hit": false,
+        "prov:endedAtTime": "2026-11-11T07:39:49.663294+00:00",
+        "prov:wasInformedBy": {
+          "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:activity:3a109b59-c9ea-4a0d-bd0a-efa4cc8a2f7a"
+        },
+        "gme:resultDigest": "76d1fdb3100618538abc1d1abb5b24a41086f1249aa2e42abc08b05320258330"
+      },
+      {
+        "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:query:dff5a778-e612-43cd-b856-087853c397ca",
+        "@type": [
+          "prov:Activity",
+          "gme:Retrieval"
+        ],
+        "gme:service": "github.get_commit_bookends",
+        "gme:status": "success",
+        "gme:arguments": {
+          "@value": {
+            "full_name": "sdsc-ordes/gimie",
+            "login": "caviri"
+          },
+          "@type": "@json"
+        },
+        "gme:source": [],
+        "prov:startedAtTime": "2026-11-11T07:39:49.663681+00:00",
+        "gme:cache_hit": false,
+        "prov:endedAtTime": "2026-11-11T07:39:50.117861+00:00",
+        "prov:wasInformedBy": {
+          "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:activity:3a109b59-c9ea-4a0d-bd0a-efa4cc8a2f7a"
+        },
+        "gme:resultDigest": "9d494b3366359dc49cacf8c8f37ec4993c206279255d05c809ee7bdc8dbc050e"
+      },
+      {
+        "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:query:6e18ee8b-fd32-4e56-a70f-3a853bbc7aa5",
+        "@type": [
+          "prov:Activity",
+          "gme:Retrieval"
+        ],
+        "gme:service": "github.get_commit_bookends",
+        "gme:status": "success",
+        "gme:arguments": {
+          "@value": {
+            "full_name": "sdsc-ordes/gimie",
+            "login": "cmdoret"
+          },
+          "@type": "@json"
+        },
+        "gme:source": [],
+        "prov:startedAtTime": "2026-11-11T07:39:50.118035+00:00",
+        "gme:cache_hit": false,
+        "prov:endedAtTime": "2026-11-11T07:39:50.985363+00:00",
+        "prov:wasInformedBy": {
+          "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:activity:3a109b59-c9ea-4a0d-bd0a-efa4cc8a2f7a"
+        },
+        "gme:resultDigest": "b8d8d786cb4b71761d9e1c5823785f8251042bb6cf3ba84bc22f7665a2473cac"
+      },
+      {
+        "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:query:4f88c7fc-d1e5-4fd6-ad35-4807dfde5598",
+        "@type": [
+          "prov:Activity",
+          "gme:Retrieval"
+        ],
+        "gme:service": "github.get_commit_bookends",
+        "gme:status": "success",
+        "gme:arguments": {
+          "@value": {
+            "full_name": "sdsc-ordes/gimie",
+            "login": "ksanao"
+          },
+          "@type": "@json"
+        },
+        "gme:source": [],
+        "prov:startedAtTime": "2026-11-11T07:39:50.985517+00:00",
+        "gme:cache_hit": false,
+        "prov:endedAtTime": "2026-11-11T07:39:51.579430+00:00",
+        "prov:wasInformedBy": {
+          "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:activity:3a109b59-c9ea-4a0d-bd0a-efa4cc8a2f7a"
+        },
+        "gme:resultDigest": "f8cf3ec6a11d2381d35ca595a8378d1d3de55c2d5e014f7b01879e75520fb755"
+      },
+      {
+        "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:query:8b80c595-1edb-4f56-b202-03e34cdaff80",
+        "@type": [
+          "prov:Activity",
+          "gme:Retrieval"
+        ],
+        "gme:service": "github.get_commit_bookends",
+        "gme:status": "success",
+        "gme:arguments": {
+          "@value": {
+            "full_name": "sdsc-ordes/gimie",
+            "login": "marftn"
+          },
+          "@type": "@json"
+        },
+        "gme:source": [],
+        "prov:startedAtTime": "2026-11-11T07:39:51.579585+00:00",
+        "gme:cache_hit": false,
+        "prov:endedAtTime": "2026-11-11T07:39:52.394968+00:00",
+        "prov:wasInformedBy": {
+          "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:activity:3a109b59-c9ea-4a0d-bd0a-efa4cc8a2f7a"
+        },
+        "gme:resultDigest": "a74b7de53e0ffd2c6dd534eb5de5b88afcc27bc4d7deadffee18ec5092728894"
+      },
+      {
+        "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:query:2872043d-5f54-4bcc-b878-648ffd6d3786",
+        "@type": [
+          "prov:Activity",
+          "gme:Retrieval"
+        ],
+        "gme:service": "github.get_commit_bookends",
+        "gme:status": "success",
+        "gme:arguments": {
+          "@value": {
+            "full_name": "sdsc-ordes/gimie",
+            "login": "raj921"
+          },
+          "@type": "@json"
+        },
+        "gme:source": [],
+        "prov:startedAtTime": "2026-11-11T07:39:52.395168+00:00",
+        "gme:cache_hit": false,
+        "prov:endedAtTime": "2026-11-11T07:39:52.796511+00:00",
+        "prov:wasInformedBy": {
+          "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:activity:3a109b59-c9ea-4a0d-bd0a-efa4cc8a2f7a"
+        },
+        "gme:resultDigest": "418e3bba1c23729504ed7b43079c7dfdbb84d9bd095bb46e960372080f117d19"
+      },
+      {
+        "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:query:b0476e02-f152-466f-b295-a77175ed9d25",
+        "@type": [
+          "prov:Activity",
+          "gme:Retrieval"
+        ],
+        "gme:service": "github.get_commit_bookends",
+        "gme:status": "success",
+        "gme:arguments": {
+          "@value": {
+            "full_name": "sdsc-ordes/gimie",
+            "login": "rmfranken"
+          },
+          "@type": "@json"
+        },
+        "gme:source": [],
+        "prov:startedAtTime": "2026-11-11T07:39:52.796791+00:00",
+        "gme:cache_hit": false,
+        "prov:endedAtTime": "2026-11-11T07:39:53.635132+00:00",
+        "prov:wasInformedBy": {
+          "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:activity:3a109b59-c9ea-4a0d-bd0a-efa4cc8a2f7a"
+        },
+        "gme:resultDigest": "7ee9fdee9014385a1660fa06a17277d6a62c33a055dcbf26dd99f6c993d8704e"
+      },
+      {
+        "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:query:fe97b180-5b3d-4e52-bb87-cdcb659712d5",
+        "@type": [
+          "prov:Activity",
+          "gme:Retrieval"
+        ],
+        "gme:service": "github.get_commit_bookends",
+        "gme:status": "success",
+        "gme:arguments": {
+          "@value": {
+            "full_name": "sdsc-ordes/gimie",
+            "login": "sabinem"
+          },
+          "@type": "@json"
+        },
+        "gme:source": [],
+        "prov:startedAtTime": "2026-11-11T07:39:53.635304+00:00",
+        "gme:cache_hit": false,
+        "prov:endedAtTime": "2026-11-11T07:39:54.435755+00:00",
+        "prov:wasInformedBy": {
+          "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:activity:3a109b59-c9ea-4a0d-bd0a-efa4cc8a2f7a"
+        },
+        "gme:resultDigest": "47752254710c3d6fadca8d1afb3a4cf5c1e00593c92f75ac96f981ba87ef3b28"
+      },
+      {
+        "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:query:ee4012e9-5b3a-4576-8c5b-81ffccfcc51c",
+        "@type": [
+          "prov:Activity",
+          "gme:Retrieval"
+        ],
+        "gme:service": "github.get_commit_bookends",
+        "gme:status": "success",
+        "gme:arguments": {
+          "@value": {
+            "full_name": "sdsc-ordes/gimie",
+            "login": "sabrinaossey"
+          },
+          "@type": "@json"
+        },
+        "gme:source": [],
+        "prov:startedAtTime": "2026-11-11T07:39:54.435918+00:00",
+        "gme:cache_hit": false,
+        "prov:endedAtTime": "2026-11-11T07:39:55.318831+00:00",
+        "prov:wasInformedBy": {
+          "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:activity:3a109b59-c9ea-4a0d-bd0a-efa4cc8a2f7a"
+        },
+        "gme:resultDigest": "f5edbe664f7081965ee1d3d52de2165527795d4b210fb310c3a644edda07850f"
+      },
+      {
+        "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:query:4ad4639b-66a2-46d0-94d9-f264c5a81b11",
+        "@type": [
+          "prov:Activity",
+          "gme:Retrieval"
+        ],
+        "gme:service": "github.get_commit_bookends",
+        "gme:status": "success",
+        "gme:arguments": {
+          "@value": {
+            "full_name": "sdsc-ordes/gimie",
+            "login": "supermaxiste"
+          },
+          "@type": "@json"
+        },
+        "gme:source": [],
+        "prov:startedAtTime": "2026-11-11T07:39:55.319050+00:00",
+        "gme:cache_hit": false,
+        "prov:endedAtTime": "2026-11-11T07:39:56.395471+00:00",
+        "prov:wasInformedBy": {
+          "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:activity:3a109b59-c9ea-4a0d-bd0a-efa4cc8a2f7a"
+        },
+        "gme:resultDigest": "ae5e8db134e2b796845156fba3736bea05e0a6e02fac19e51d2488f69b0160db"
+      },
+      {
+        "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:query:d0f43364-a5ec-463e-a548-cfd872007cd4",
+        "@type": [
+          "prov:Activity",
+          "gme:Retrieval"
+        ],
+        "gme:service": "github.get_commit_bookends",
+        "gme:status": "success",
+        "gme:arguments": {
+          "@value": {
+            "full_name": "sdsc-ordes/gimie",
+            "login": "vancauwe"
+          },
+          "@type": "@json"
+        },
+        "gme:source": [],
+        "prov:startedAtTime": "2026-11-11T07:39:56.395649+00:00",
+        "gme:cache_hit": false,
+        "prov:endedAtTime": "2026-11-11T07:39:57.198783+00:00",
+        "prov:wasInformedBy": {
+          "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:activity:3a109b59-c9ea-4a0d-bd0a-efa4cc8a2f7a"
+        },
+        "gme:resultDigest": "1bd7f93b902bf748a8f32077199f401313c247c6f55627cc53dd3d6bbd0c8602"
+      },
+      {
+        "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:query:f7f565aa-46c5-4424-82d2-bb04050382d1",
+        "@type": [
+          "prov:Activity",
+          "gme:Retrieval"
+        ],
+        "gme:service": "github.get_languages",
+        "gme:status": "success",
+        "gme:arguments": {
+          "@value": {
+            "full_name": "sdsc-ordes/gimie"
+          },
+          "@type": "@json"
+        },
+        "gme:source": [],
+        "prov:startedAtTime": "2026-11-11T07:39:57.199176+00:00",
+        "gme:cache_hit": false,
+        "prov:endedAtTime": "2026-11-11T07:39:57.199215+00:00",
+        "prov:wasInformedBy": {
+          "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:activity:3a109b59-c9ea-4a0d-bd0a-efa4cc8a2f7a"
+        },
+        "gme:resultDigest": "ee1df72bf2771102fcccaad3fd1b2ef556986e58b97b7527cd2307dd8707f8cd"
+      },
+      {
+        "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:query:12ce6b18-c521-4ba2-8911-a59bd27b4f0d",
+        "@type": [
+          "prov:Activity",
+          "gme:Retrieval"
+        ],
+        "gme:service": "github.get_repository_readme",
+        "gme:status": "success",
+        "gme:arguments": {
+          "@value": {
+            "full_name": "sdsc-ordes/gimie"
+          },
+          "@type": "@json"
+        },
+        "gme:source": [],
+        "prov:startedAtTime": "2026-11-11T07:39:57.199463+00:00",
+        "gme:cache_hit": false,
+        "prov:endedAtTime": "2026-11-11T07:39:57.663696+00:00",
+        "prov:wasInformedBy": {
+          "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:activity:3a109b59-c9ea-4a0d-bd0a-efa4cc8a2f7a"
+        },
+        "gme:resultDigest": "5c72572cbb08741f3ea6731f5aaf57de14269a4a3a8fe781b95cb8ca58afcd24"
+      },
+      {
+        "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:query:ce1d1f3e-ab61-482e-ae5d-512f6d60f280",
+        "@type": [
+          "prov:Activity",
+          "gme:Retrieval"
+        ],
+        "gme:service": "github.get_repository_jsonld",
+        "gme:status": "success",
+        "gme:arguments": {
+          "@value": {
+            "full_name": "sdsc-ordes/gimie"
+          },
+          "@type": "@json"
+        },
+        "gme:source": [],
+        "prov:startedAtTime": "2026-11-11T07:39:57.664186+00:00",
+        "gme:cache_hit": false,
+        "prov:endedAtTime": "2026-11-11T07:39:57.664203+00:00",
+        "prov:wasInformedBy": {
+          "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:activity:3a109b59-c9ea-4a0d-bd0a-efa4cc8a2f7a"
+        },
+        "gme:resultDigest": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+      },
+      {
+        "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:query:862d0402-37b3-4073-a576-f839423904f2",
+        "@type": [
+          "prov:Activity",
+          "gme:Retrieval"
+        ],
+        "gme:service": "github.get_repository_aux_files",
+        "gme:status": "success",
+        "gme:arguments": {
+          "@value": {
+            "full_name": "sdsc-ordes/gimie"
+          },
+          "@type": "@json"
+        },
+        "gme:source": [],
+        "prov:startedAtTime": "2026-11-11T07:39:57.664401+00:00",
+        "gme:cache_hit": false,
+        "prov:endedAtTime": "2026-11-11T07:39:59.696613+00:00",
+        "prov:wasInformedBy": {
+          "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:activity:3a109b59-c9ea-4a0d-bd0a-efa4cc8a2f7a"
+        },
+        "gme:resultDigest": "bdb5fb06e9077287f5e7dacd3a0374f00e948b22c474680d2025d78cfb74fa1f"
+      },
+      {
+        "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:query:6e9edc45-4532-4e6b-9a73-ad9074b32f46",
+        "@type": [
+          "prov:Activity",
+          "gme:Retrieval"
+        ],
+        "gme:service": "github.get_repository_releases",
+        "gme:status": "success",
+        "gme:arguments": {
+          "@value": {
+            "full_name": "sdsc-ordes/gimie"
+          },
+          "@type": "@json"
+        },
+        "gme:source": [
+          {
+            "@id": "https://github.com/sdsc-ordes/gimie/releases/tag/0.3.0"
+          },
+          {
+            "@id": "https://github.com/sdsc-ordes/gimie/releases/tag/0.4.0"
+          },
+          {
+            "@id": "https://github.com/sdsc-ordes/gimie/releases/tag/0.5.0"
+          },
+          {
+            "@id": "https://github.com/sdsc-ordes/gimie/releases/tag/0.6.0"
+          },
+          {
+            "@id": "https://github.com/sdsc-ordes/gimie/releases/tag/0.6.1"
+          },
+          {
+            "@id": "https://github.com/sdsc-ordes/gimie/releases/tag/v0.2.0"
+          },
+          {
+            "@id": "https://github.com/sdsc-ordes/gimie/releases/tag/v0.7.0"
+          },
+          {
+            "@id": "https://github.com/sdsc-ordes/gimie/releases/tag/v0.7.1"
+          },
+          {
+            "@id": "https://github.com/sdsc-ordes/gimie/releases/tag/v0.7.2"
+          },
+          {
+            "@id": "https://github.com/sdsc-ordes/gimie/releases/tag/v0.8.0"
+          }
+        ],
+        "prov:startedAtTime": "2026-11-11T07:39:59.697150+00:00",
+        "gme:cache_hit": false,
+        "prov:endedAtTime": "2026-11-11T07:40:00.102212+00:00",
+        "prov:wasInformedBy": {
+          "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:activity:3a109b59-c9ea-4a0d-bd0a-efa4cc8a2f7a"
+        },
+        "gme:resultDigest": "45346e24e43ada7b8cf926d2cf4b6632f76bedc3221fb38c179109eee6b45397"
+      },
+      {
+        "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:query:226399de-9b59-4ac5-b093-140279dcc97b",
+        "@type": [
+          "prov:Activity",
+          "gme:Retrieval"
+        ],
+        "gme:service": "github.get_repository_container_images",
+        "gme:status": "success",
+        "gme:arguments": {
+          "@value": {
+            "full_name": "sdsc-ordes/gimie"
+          },
+          "@type": "@json"
+        },
+        "gme:source": [],
+        "prov:startedAtTime": "2026-11-11T07:40:00.103004+00:00",
+        "gme:cache_hit": false,
+        "prov:endedAtTime": "2026-11-11T07:40:00.600900+00:00",
+        "prov:wasInformedBy": {
+          "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:activity:3a109b59-c9ea-4a0d-bd0a-efa4cc8a2f7a"
+        },
+        "gme:resultDigest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      {
+        "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:query:8326b8d4-f1be-4ccb-8bcf-50efd09c0431",
+        "@type": [
+          "prov:Activity",
+          "gme:Retrieval"
+        ],
+        "gme:service": "github.get_repository_community_profile",
+        "gme:status": "success",
+        "gme:arguments": {
+          "@value": {
+            "full_name": "sdsc-ordes/gimie"
+          },
+          "@type": "@json"
+        },
+        "gme:source": [],
+        "prov:startedAtTime": "2026-11-11T07:40:00.601305+00:00",
+        "gme:cache_hit": false,
+        "prov:endedAtTime": "2026-11-11T07:40:01.114839+00:00",
+        "prov:wasInformedBy": {
+          "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:activity:3a109b59-c9ea-4a0d-bd0a-efa4cc8a2f7a"
+        },
+        "gme:resultDigest": "50fa849a4492a2d1def924e69e077fabe04df309b0cabc034be33e217b7a3569"
+      },
+      {
+        "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:query:ed624723-0a47-4f98-97ac-0f6f58390ee1",
+        "@type": [
+          "prov:Activity",
+          "gme:Retrieval"
+        ],
+        "gme:service": "github.get_repository_tags",
+        "gme:status": "success",
+        "gme:arguments": {
+          "@value": {
+            "full_name": "sdsc-ordes/gimie"
+          },
+          "@type": "@json"
+        },
+        "gme:source": [],
+        "prov:startedAtTime": "2026-11-11T07:40:01.115244+00:00",
+        "gme:cache_hit": false,
+        "prov:endedAtTime": "2026-11-11T07:40:01.536856+00:00",
+        "prov:wasInformedBy": {
+          "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:activity:3a109b59-c9ea-4a0d-bd0a-efa4cc8a2f7a"
+        },
+        "gme:resultDigest": "86be0bcce470c243ce1921390c52e5e41852d81f44e1c73e656c97104e833688"
+      },
+      {
+        "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:query:e498136f-a4a8-4c29-a65e-785f745a7a10",
+        "@type": [
+          "prov:Activity",
+          "gme:Retrieval"
+        ],
+        "gme:service": "github.get_repository_compose_files",
+        "gme:status": "success",
+        "gme:arguments": {
+          "@value": {
+            "full_name": "sdsc-ordes/gimie"
+          },
+          "@type": "@json"
+        },
+        "gme:source": [],
+        "prov:startedAtTime": "2026-11-11T07:40:01.537283+00:00",
+        "gme:cache_hit": false,
+        "prov:endedAtTime": "2026-11-11T07:40:02.119897+00:00",
+        "prov:wasInformedBy": {
+          "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:activity:3a109b59-c9ea-4a0d-bd0a-efa4cc8a2f7a"
+        },
+        "gme:resultDigest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      {
+        "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:query:6b27123b-c8d4-45c3-964e-c904c4c7417c",
+        "@type": [
+          "prov:Activity",
+          "gme:Retrieval"
+        ],
+        "gme:service": "github.get_repository_root_entries",
+        "gme:status": "success",
+        "gme:arguments": {
+          "@value": {
+            "full_name": "sdsc-ordes/gimie"
+          },
+          "@type": "@json"
+        },
+        "gme:source": [],
+        "prov:startedAtTime": "2026-11-11T07:40:02.120331+00:00",
+        "gme:cache_hit": false,
+        "prov:endedAtTime": "2026-11-11T07:40:02.901845+00:00",
+        "prov:wasInformedBy": {
+          "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:activity:3a109b59-c9ea-4a0d-bd0a-efa4cc8a2f7a"
+        },
+        "gme:resultDigest": "73867a3fae2d65aee83555be4aebb66228ad706d2678049eb3540848cbf73fb0"
+      },
+      {
+        "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:query:1a0ece0e-13ff-478f-a2c1-dfb6c290d4e1",
+        "@type": [
+          "prov:Activity",
+          "gme:Retrieval"
+        ],
+        "gme:service": "package_registry.get_pypi_package",
+        "gme:status": "success",
+        "gme:arguments": {
+          "@value": {
+            "name": "gimie"
+          },
+          "@type": "@json"
+        },
+        "gme:source": [],
+        "prov:startedAtTime": "2026-11-11T07:40:02.902583+00:00",
+        "gme:cache_hit": false,
+        "prov:endedAtTime": "2026-11-11T07:40:03.112655+00:00",
+        "prov:wasInformedBy": {
+          "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:activity:3a109b59-c9ea-4a0d-bd0a-efa4cc8a2f7a"
+        },
+        "gme:resultDigest": "cac5768345d9cc5a2054ce209592c0fe3391bfcc4585e4de191ae43093e14c5e"
+      },
+      {
+        "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:assertion:86cfc11387c3f819c69a1487b9d8c54e14c081a2f8ec7cf4ccddd758a307fc8d",
+        "@type": "rdf:Statement",
+        "rdf:subject": {
+          "@id": "https://github.com/sdsc-ordes"
+        },
+        "rdf:predicate": {
+          "@id": "schema:name"
+        },
+        "rdf:object": "sdsc-ordes",
+        "gme:evidenceKind": "transformation",
+        "prov:wasGeneratedBy": {
+          "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:activity:4406e294-5d52-4219-98b0-8d0324cd75a8"
+        },
+        "gme:matchingQuery": [
+          {
+            "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:query:8a24782d-e207-495f-a98b-e0e00e3a8de0"
+          }
+        ]
+      },
+      {
+        "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:assertion:1575db5734e481df73ef8e3d9a858ec63934de24d0467a149d2b65c17a112cbb",
+        "@type": "rdf:Statement",
+        "rdf:subject": {
+          "@id": "https://github.com/sdsc-ordes"
+        },
+        "rdf:predicate": {
+          "@id": "pulse:githubUsername"
+        },
+        "rdf:object": "https://github.com/sdsc-ordes",
+        "gme:evidenceKind": "transformation",
+        "prov:wasGeneratedBy": {
+          "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:activity:4406e294-5d52-4219-98b0-8d0324cd75a8"
+        },
+        "gme:matchingQuery": [
+          {
+            "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:query:8a24782d-e207-495f-a98b-e0e00e3a8de0"
+          }
+        ]
+      },
+      {
+        "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:assertion:423ba1f11960b3805432ca0707fb2e5adebcd7adc4f9d094ba5f09e0d688fca9",
+        "@type": "rdf:Statement",
+        "rdf:subject": {
+          "@id": "https://github.com/sdsc-ordes"
+        },
+        "rdf:predicate": {
+          "@id": "pulse:owns"
+        },
+        "rdf:object": {
+          "@id": "https://github.com/sdsc-ordes/gimie"
+        },
+        "gme:evidenceKind": "transformation",
+        "prov:wasGeneratedBy": {
+          "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:activity:bf665b6c-1302-4cb2-b457-a9aced4bf333"
+        },
+        "gme:matchingQuery": [
+          {
+            "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:query:8a24782d-e207-495f-a98b-e0e00e3a8de0"
+          },
+          {
+            "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:query:1a0ece0e-13ff-478f-a2c1-dfb6c290d4e1"
+          }
+        ]
+      },
+      {
+        "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:assertion:e3ee6e0571c53eb9e9641380ac04808f016c6181a9f481bde1b41645f55811a9",
+        "@type": "rdf:Statement",
+        "rdf:subject": {
+          "@id": "https://github.com/sdsc-ordes/gimie"
+        },
+        "rdf:predicate": {
+          "@id": "schema:name"
+        },
+        "rdf:object": "gimie",
+        "gme:evidenceKind": "rule_based",
+        "prov:wasGeneratedBy": {
+          "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:activity:d29ed2bd-49ef-45f9-b9a6-4972e82b4f76"
+        },
+        "gme:matchingQuery": [
+          {
+            "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:query:8a24782d-e207-495f-a98b-e0e00e3a8de0"
+          },
+          {
+            "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:query:6b27123b-c8d4-45c3-964e-c904c4c7417c"
+          },
+          {
+            "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:query:1a0ece0e-13ff-478f-a2c1-dfb6c290d4e1"
+          }
+        ]
+      },
+      {
+        "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:assertion:189e069f0bdbff2ae339bb3cecebbe4b1d9c38ddb64c066b0f02f39485e04423",
+        "@type": "rdf:Statement",
+        "rdf:subject": {
+          "@id": "https://github.com/sdsc-ordes/gimie"
+        },
+        "rdf:predicate": {
+          "@id": "pulse:githubRepositoryHandle"
+        },
+        "rdf:object": "https://github.com/sdsc-ordes/gimie",
+        "gme:evidenceKind": "rule_based",
+        "prov:wasGeneratedBy": {
+          "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:activity:d29ed2bd-49ef-45f9-b9a6-4972e82b4f76"
+        },
+        "gme:matchingQuery": [
+          {
+            "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:query:8a24782d-e207-495f-a98b-e0e00e3a8de0"
+          },
+          {
+            "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:query:1a0ece0e-13ff-478f-a2c1-dfb6c290d4e1"
+          }
+        ]
+      },
+      {
+        "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:assertion:cfb201e6281723867c92ada03035a2ed6233be55124ea1b6c30ee7d3b689ecb1",
+        "@type": "rdf:Statement",
+        "rdf:subject": {
+          "@id": "https://github.com/sdsc-ordes/gimie"
+        },
+        "rdf:predicate": {
+          "@id": "schema:author"
+        },
+        "rdf:object": {
+          "@id": "https://github.com/sdsc-ordes"
+        },
+        "gme:evidenceKind": "transformation",
+        "prov:wasGeneratedBy": {
+          "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:activity:4406e294-5d52-4219-98b0-8d0324cd75a8"
+        },
+        "gme:matchingQuery": [
+          {
+            "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:query:8a24782d-e207-495f-a98b-e0e00e3a8de0"
+          }
+        ]
+      },
+      {
+        "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:assertion:991d4359f3727a01e0218913c3af4b9cd281495613b3873d7f509f862a925829",
+        "@type": "rdf:Statement",
+        "rdf:subject": {
+          "@id": "https://github.com/sdsc-ordes/gimie"
+        },
+        "rdf:predicate": {
+          "@id": "pulse:githubRepoStars"
+        },
+        "rdf:object": 16,
+        "gme:evidenceKind": "rule_based",
+        "prov:wasGeneratedBy": {
+          "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:activity:d29ed2bd-49ef-45f9-b9a6-4972e82b4f76"
+        },
+        "gme:matchingQuery": [
+          {
+            "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:query:8a24782d-e207-495f-a98b-e0e00e3a8de0"
+          }
+        ]
+      },
+      {
+        "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:assertion:35c5b9b072dd1d3f8fc4826b743a7e454349461d7fc32120aebc3a42c1855b01",
+        "@type": "rdf:Statement",
+        "rdf:subject": {
+          "@id": "https://github.com/sdsc-ordes/gimie"
+        },
+        "rdf:predicate": {
+          "@id": "pulse:githubRepoForks"
+        },
+        "rdf:object": 3,
+        "gme:evidenceKind": "rule_based",
+        "prov:wasGeneratedBy": {
+          "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:activity:d29ed2bd-49ef-45f9-b9a6-4972e82b4f76"
+        },
+        "gme:matchingQuery": [
+          {
+            "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:query:8a24782d-e207-495f-a98b-e0e00e3a8de0"
+          }
+        ]
+      },
+      {
+        "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:assertion:6d3e8559febc23285c95177cd7c9dc057cd196788359c92ce708667d00786f4f",
+        "@type": "rdf:Statement",
+        "rdf:subject": {
+          "@id": "https://github.com/sdsc-ordes/gimie"
+        },
+        "rdf:predicate": {
+          "@id": "schema:dateCreated"
+        },
+        "rdf:object": "2022-12-07T10:19:30Z",
+        "gme:evidenceKind": "rule_based",
+        "prov:wasGeneratedBy": {
+          "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:activity:d29ed2bd-49ef-45f9-b9a6-4972e82b4f76"
+        },
+        "gme:matchingQuery": [
+          {
+            "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:query:8a24782d-e207-495f-a98b-e0e00e3a8de0"
+          }
+        ]
+      },
+      {
+        "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:assertion:38172df14f084ada09811a00acb08437854d8cef79e1f99b3841b202c0795801",
+        "@type": "rdf:Statement",
+        "rdf:subject": {
+          "@id": "https://github.com/sdsc-ordes/gimie"
+        },
+        "rdf:predicate": {
+          "@id": "schema:license"
+        },
+        "rdf:object": {
+          "@id": "https://spdx.org/licenses/Apache-2.0.html"
+        },
+        "gme:evidenceKind": "rule_based",
+        "prov:wasGeneratedBy": {
+          "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:activity:d29ed2bd-49ef-45f9-b9a6-4972e82b4f76"
+        }
+      },
+      {
+        "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:assertion:776ac76ee55e1257d87a02ae6c8d0ca3b12486265fbc20649c8015d091ec5cc2",
+        "@type": "rdf:Statement",
+        "rdf:subject": {
+          "@id": "https://github.com/sdsc-ordes/gimie"
+        },
+        "rdf:predicate": {
+          "@id": "schema:programmingLanguage"
+        },
+        "rdf:object": "Python",
+        "gme:evidenceKind": "rule_based",
+        "prov:wasGeneratedBy": {
+          "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:activity:d29ed2bd-49ef-45f9-b9a6-4972e82b4f76"
+        },
+        "gme:matchingQuery": [
+          {
+            "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:query:8a24782d-e207-495f-a98b-e0e00e3a8de0"
+          }
+        ]
+      },
+      {
+        "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:assertion:5f361a8916d4536b127cc23adf26b669e656838d5c184538e043e0c329179243",
+        "@type": "rdf:Statement",
+        "rdf:subject": {
+          "@id": "https://github.com/sdsc-ordes/gimie"
+        },
+        "rdf:predicate": {
+          "@id": "pulse:ownedBy"
+        },
+        "rdf:object": {
+          "@id": "https://github.com/sdsc-ordes"
+        },
+        "gme:evidenceKind": "rule_based",
+        "prov:wasGeneratedBy": {
+          "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:activity:d29ed2bd-49ef-45f9-b9a6-4972e82b4f76"
+        },
+        "gme:matchingQuery": [
+          {
+            "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:query:8a24782d-e207-495f-a98b-e0e00e3a8de0"
+          }
+        ]
+      },
+      {
+        "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:assertion:a9799d13255a20eeaf746768bc95dabb89ca8eb17c6ddd58b8141e72f68519f7",
+        "@type": "rdf:Statement",
+        "rdf:subject": {
+          "@id": "https://github.com/sdsc-ordes/gimie"
+        },
+        "rdf:predicate": {
+          "@id": "pulse:repositoryType"
+        },
+        "rdf:object": "pulse:Software",
+        "gme:evidenceKind": "rule_based",
+        "prov:wasGeneratedBy": {
+          "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:activity:d29ed2bd-49ef-45f9-b9a6-4972e82b4f76"
+        }
+      },
+      {
+        "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:assertion:41a7525a0e4984198b9df87c48740210d71351be7697fd427150022c2071d198",
+        "@type": "rdf:Statement",
+        "rdf:subject": {
+          "@id": "https://github.com/sdsc-ordes__https://github.com/sdsc-ordes/gimie"
+        },
+        "rdf:predicate": {
+          "@id": "pulse:contributionTo"
+        },
+        "rdf:object": {
+          "@id": "https://github.com/sdsc-ordes/gimie"
+        },
+        "gme:evidenceKind": "transformation",
+        "prov:wasGeneratedBy": {
+          "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:activity:4406e294-5d52-4219-98b0-8d0324cd75a8"
+        },
+        "gme:matchingQuery": [
+          {
+            "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:query:8a24782d-e207-495f-a98b-e0e00e3a8de0"
+          },
+          {
+            "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:query:1a0ece0e-13ff-478f-a2c1-dfb6c290d4e1"
+          }
+        ]
+      },
+      {
+        "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:assertion:a54637491a30a4cfd5272d1a4214ca34f9826db1a70717d14892cafd63cdcd1d",
+        "@type": "rdf:Statement",
+        "rdf:subject": {
+          "@id": "https://github.com/sdsc-ordes__https://github.com/sdsc-ordes/gimie"
+        },
+        "rdf:predicate": {
+          "@id": "pulse:contributionCount"
+        },
+        "rdf:object": 1,
+        "gme:evidenceKind": "transformation",
+        "prov:wasGeneratedBy": {
+          "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:activity:4406e294-5d52-4219-98b0-8d0324cd75a8"
+        },
+        "gme:matchingQuery": [
+          {
+            "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:query:dff5a778-e612-43cd-b856-087853c397ca"
+          },
+          {
+            "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:query:4f88c7fc-d1e5-4fd6-ad35-4807dfde5598"
+          },
+          {
+            "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:query:2872043d-5f54-4bcc-b878-648ffd6d3786"
+          },
+          {
+            "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:query:f7f565aa-46c5-4424-82d2-bb04050382d1"
+          }
+        ]
+      },
+      {
+        "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:assertion:faf92d715cd95dd4bc52389aac24d325d3bde78b1ef09e468a1be9be0b1868f7",
+        "@type": "rdf:Statement",
+        "rdf:subject": {
+          "@id": "https://github.com/sdsc-ordes__https://github.com/sdsc-ordes/gimie"
+        },
+        "rdf:predicate": {
+          "@id": "schema:author"
+        },
+        "rdf:object": {
+          "@id": "https://github.com/sdsc-ordes"
+        },
+        "gme:evidenceKind": "transformation",
+        "prov:wasGeneratedBy": {
+          "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:activity:4406e294-5d52-4219-98b0-8d0324cd75a8"
+        },
+        "gme:matchingQuery": [
+          {
+            "@id": "urn:pulse:run:0552cfd5-fcd2-4131-bacf-220d83579093:query:8a24782d-e207-495f-a98b-e0e00e3a8de0"
+          }
+        ]
+      }
+    ]
+  },
+  "execution_profile": {
+    "profile": {
+      "schema_version": 1,
+      "name": "live-root-rule_based",
+      "version": "1",
+      "runtime": "rule_based",
+      "collectors": [
+        {
+          "component": "github.context",
+          "options": {},
+          "model": null
+        }
+      ],
+      "agents": {},
+      "toolsets": {},
+      "stages": {
+        "repository": [
+          "context_gather",
+          "repo_agent"
+        ]
+      },
+      "max_concurrent_agents": 2,
+      "retry_max_retries": 0,
+      "model": null
+    },
+    "components": {
+      "github.context": "1",
+      "rule_based.repository": "1",
+      "rule_based.person": "1",
+      "rule_based.organization": "1",
+      "rule_based.article": "1",
+      "rule_based.membership": "1",
+      "rule_based.contribution": "1"
+    },
+    "tool_catalog": {
+      "tools": {
+        "sources.search": {
+          "version": "1",
+          "requires": [
+            "sources"
+          ],
+          "requires_any": [],
+          "options_schema": {
+            "additionalProperties": false,
+            "properties": {},
+            "title": "NoToolOptions",
+            "type": "object"
+          }
+        },
+        "sources.manifest": {
+          "version": "1",
+          "requires": [
+            "sources"
+          ],
+          "requires_any": [],
+          "options_schema": {
+            "additionalProperties": false,
+            "properties": {},
+            "title": "NoToolOptions",
+            "type": "object"
+          }
+        },
+        "web.fetch": {
+          "version": "1",
+          "requires": [],
+          "requires_any": [],
+          "options_schema": {
+            "additionalProperties": false,
+            "properties": {},
+            "title": "NoToolOptions",
+            "type": "object"
+          }
+        },
+        "web.search": {
+          "version": "1",
+          "requires": [],
+          "requires_any": [],
+          "options_schema": {
+            "additionalProperties": false,
+            "properties": {},
+            "title": "NoToolOptions",
+            "type": "object"
+          }
+        },
+        "corpus.grep": {
+          "version": "1",
+          "requires": [],
+          "requires_any": [],
+          "options_schema": {
+            "additionalProperties": false,
+            "properties": {},
+            "title": "NoToolOptions",
+            "type": "object"
+          }
+        },
+        "discipline.list": {
+          "version": "1",
+          "requires": [],
+          "requires_any": [],
+          "options_schema": {
+            "additionalProperties": false,
+            "properties": {},
+            "title": "NoToolOptions",
+            "type": "object"
+          }
+        },
+        "email.hash": {
+          "version": "1",
+          "requires": [],
+          "requires_any": [],
+          "options_schema": {
+            "additionalProperties": false,
+            "properties": {},
+            "title": "NoToolOptions",
+            "type": "object"
+          }
+        },
+        "organization.identity": {
+          "version": "1",
+          "requires": [],
+          "requires_any": [
+            "ror",
+            "infoscience"
+          ],
+          "options_schema": {
+            "additionalProperties": false,
+            "properties": {},
+            "title": "NoToolOptions",
+            "type": "object"
+          }
+        },
+        "orcid.query": {
+          "version": "1",
+          "requires": [
+            "orcid"
+          ],
+          "requires_any": [],
+          "options_schema": {
+            "additionalProperties": false,
+            "properties": {},
+            "title": "NoToolOptions",
+            "type": "object"
+          }
+        },
+        "github.repository": {
+          "version": "1",
+          "requires": [
+            "github"
+          ],
+          "requires_any": [],
+          "options_schema": {
+            "additionalProperties": false,
+            "properties": {
+              "max_chars": {
+                "default": 12000,
+                "maximum": 50000,
+                "minimum": 1000,
+                "title": "Max Chars",
+                "type": "integer"
+              }
+            },
+            "title": "RepositoryToolOptions",
+            "type": "object"
+          }
+        },
+        "github.dependencies": {
+          "version": "1",
+          "requires": [
+            "github"
+          ],
+          "requires_any": [],
+          "options_schema": {
+            "additionalProperties": false,
+            "properties": {},
+            "title": "NoToolOptions",
+            "type": "object"
+          }
+        },
+        "github.organization": {
+          "version": "1",
+          "requires": [
+            "github"
+          ],
+          "requires_any": [],
+          "options_schema": {
+            "additionalProperties": false,
+            "properties": {},
+            "title": "NoToolOptions",
+            "type": "object"
+          }
+        },
+        "orcid.person": {
+          "version": "1",
+          "requires": [
+            "orcid"
+          ],
+          "requires_any": [],
+          "options_schema": {
+            "additionalProperties": false,
+            "properties": {},
+            "title": "NoToolOptions",
+            "type": "object"
+          }
+        },
+        "ror.organization": {
+          "version": "1",
+          "requires": [
+            "ror"
+          ],
+          "requires_any": [],
+          "options_schema": {
+            "additionalProperties": false,
+            "properties": {},
+            "title": "NoToolOptions",
+            "type": "object"
+          }
+        },
+        "infoscience.person": {
+          "version": "1",
+          "requires": [
+            "infoscience"
+          ],
+          "requires_any": [],
+          "options_schema": {
+            "additionalProperties": false,
+            "properties": {},
+            "title": "NoToolOptions",
+            "type": "object"
+          }
+        },
+        "infoscience.organization": {
+          "version": "1",
+          "requires": [
+            "infoscience"
+          ],
+          "requires_any": [],
+          "options_schema": {
+            "additionalProperties": false,
+            "properties": {},
+            "title": "NoToolOptions",
+            "type": "object"
+          }
+        },
+        "infoscience.publications": {
+          "version": "1",
+          "requires": [
+            "infoscience"
+          ],
+          "requires_any": [],
+          "options_schema": {
+            "additionalProperties": false,
+            "properties": {},
+            "title": "NoToolOptions",
+            "type": "object"
+          }
+        },
+        "infoscience.search": {
+          "version": "1",
+          "requires": [
+            "infoscience_rag"
+          ],
+          "requires_any": [],
+          "options_schema": {
+            "additionalProperties": false,
+            "properties": {},
+            "title": "NoToolOptions",
+            "type": "object"
+          }
+        },
+        "infoscience.chunks": {
+          "version": "1",
+          "requires": [
+            "infoscience_rag"
+          ],
+          "requires_any": [],
+          "options_schema": {
+            "additionalProperties": false,
+            "properties": {},
+            "title": "NoToolOptions",
+            "type": "object"
+          }
+        },
+        "infoscience.records": {
+          "version": "1",
+          "requires": [
+            "infoscience_rag"
+          ],
+          "requires_any": [],
+          "options_schema": {
+            "additionalProperties": false,
+            "properties": {},
+            "title": "NoToolOptions",
+            "type": "object"
+          }
+        },
+        "ethz.search": {
+          "version": "1",
+          "requires": [
+            "ethz_research_collection_rag"
+          ],
+          "requires_any": [],
+          "options_schema": {
+            "additionalProperties": false,
+            "properties": {},
+            "title": "NoToolOptions",
+            "type": "object"
+          }
+        },
+        "ethz.chunks": {
+          "version": "1",
+          "requires": [
+            "ethz_research_collection_rag"
+          ],
+          "requires_any": [],
+          "options_schema": {
+            "additionalProperties": false,
+            "properties": {},
+            "title": "NoToolOptions",
+            "type": "object"
+          }
+        },
+        "ethz.records": {
+          "version": "1",
+          "requires": [
+            "ethz_research_collection_rag"
+          ],
+          "requires_any": [],
+          "options_schema": {
+            "additionalProperties": false,
+            "properties": {},
+            "title": "NoToolOptions",
+            "type": "object"
+          }
+        },
+        "huggingface.search": {
+          "version": "1",
+          "requires": [
+            "huggingface_rag"
+          ],
+          "requires_any": [],
+          "options_schema": {
+            "additionalProperties": false,
+            "properties": {},
+            "title": "NoToolOptions",
+            "type": "object"
+          }
+        },
+        "huggingface.lineage": {
+          "version": "1",
+          "requires": [
+            "huggingface_rag"
+          ],
+          "requires_any": [],
+          "options_schema": {
+            "additionalProperties": false,
+            "properties": {},
+            "title": "NoToolOptions",
+            "type": "object"
+          }
+        },
+        "openalex.search": {
+          "version": "1",
+          "requires": [
+            "openalex_rag"
+          ],
+          "requires_any": [],
+          "options_schema": {
+            "additionalProperties": false,
+            "properties": {},
+            "title": "NoToolOptions",
+            "type": "object"
+          }
+        },
+        "zenodo.search": {
+          "version": "1",
+          "requires": [
+            "zenodo_rag"
+          ],
+          "requires_any": [],
+          "options_schema": {
+            "additionalProperties": false,
+            "properties": {},
+            "title": "NoToolOptions",
+            "type": "object"
+          }
+        },
+        "zenodo.records": {
+          "version": "1",
+          "requires": [
+            "zenodo_rag"
+          ],
+          "requires_any": [],
+          "options_schema": {
+            "additionalProperties": false,
+            "properties": {},
+            "title": "NoToolOptions",
+            "type": "object"
+          }
+        },
+        "oamonitor.search": {
+          "version": "1",
+          "requires": [
+            "oamonitor_rag"
+          ],
+          "requires_any": [],
+          "options_schema": {
+            "additionalProperties": false,
+            "properties": {},
+            "title": "NoToolOptions",
+            "type": "object"
+          }
+        },
+        "oamonitor.records": {
+          "version": "1",
+          "requires": [
+            "oamonitor_rag"
+          ],
+          "requires_any": [],
+          "options_schema": {
+            "additionalProperties": false,
+            "properties": {},
+            "title": "NoToolOptions",
+            "type": "object"
+          }
+        },
+        "orcid.search": {
+          "version": "1",
+          "requires": [
+            "orcid_rag"
+          ],
+          "requires_any": [],
+          "options_schema": {
+            "additionalProperties": false,
+            "properties": {},
+            "title": "NoToolOptions",
+            "type": "object"
+          }
+        },
+        "ror.search": {
+          "version": "1",
+          "requires": [
+            "ror_rag"
+          ],
+          "requires_any": [],
+          "options_schema": {
+            "additionalProperties": false,
+            "properties": {},
+            "title": "NoToolOptions",
+            "type": "object"
+          }
+        },
+        "snsf.search": {
+          "version": "1",
+          "requires": [
+            "snsf_rag"
+          ],
+          "requires_any": [],
+          "options_schema": {
+            "additionalProperties": false,
+            "properties": {},
+            "title": "NoToolOptions",
+            "type": "object"
+          }
+        },
+        "swissubase.search": {
+          "version": "1",
+          "requires": [
+            "swissubase_rag"
+          ],
+          "requires_any": [],
+          "options_schema": {
+            "additionalProperties": false,
+            "properties": {},
+            "title": "NoToolOptions",
+            "type": "object"
+          }
+        },
+        "renkulab.search": {
+          "version": "1",
+          "requires": [
+            "renkulab_rag"
+          ],
+          "requires_any": [],
+          "options_schema": {
+            "additionalProperties": false,
+            "properties": {},
+            "title": "NoToolOptions",
+            "type": "object"
+          }
+        },
+        "github.search": {
+          "version": "1",
+          "requires": [
+            "github_rag"
+          ],
+          "requires_any": [],
+          "options_schema": {
+            "additionalProperties": false,
+            "properties": {},
+            "title": "NoToolOptions",
+            "type": "object"
+          }
+        },
+        "disciplines.search": {
+          "version": "1",
+          "requires": [
+            "epfl_graph_rag"
+          ],
+          "requires_any": [],
+          "options_schema": {
+            "additionalProperties": false,
+            "properties": {},
+            "title": "NoToolOptions",
+            "type": "object"
+          }
+        },
+        "federated.search": {
+          "version": "1",
+          "requires": [
+            "federated_rag"
+          ],
+          "requires_any": [],
+          "options_schema": {
+            "additionalProperties": false,
+            "properties": {},
+            "title": "NoToolOptions",
+            "type": "object"
+          }
+        },
+        "federated.lookup": {
+          "version": "1",
+          "requires": [
+            "federated_rag"
+          ],
+          "requires_any": [],
+          "options_schema": {
+            "additionalProperties": false,
+            "properties": {},
+            "title": "NoToolOptions",
+            "type": "object"
+          }
+        }
+      },
+      "bundles": {
+        "sources.remote": [
+          "sources.manifest",
+          "sources.search"
+        ],
+        "infoscience.rag": [
+          "infoscience.search",
+          "infoscience.chunks",
+          "infoscience.records"
+        ],
+        "ethz.rag": [
+          "ethz.search",
+          "ethz.chunks",
+          "ethz.records"
+        ],
+        "federated.rag": [
+          "federated.search",
+          "federated.lookup"
+        ],
+        "publications.search": [
+          "infoscience.search",
+          "ethz.search",
+          "openalex.search",
+          "zenodo.search",
+          "oamonitor.search"
+        ]
+      },
+      "defaults": {
+        "repo_agent": [
+          "discipline.list",
+          "web.fetch",
+          "github.dependencies",
+          "huggingface.search",
+          "huggingface.lineage",
+          "renkulab.search",
+          "github.search",
+          "disciplines.search",
+          "federated.rag",
+          "sources.remote"
+        ],
+        "person_agent": [
+          "web.fetch",
+          "email.hash",
+          "infoscience.person",
+          "orcid.person",
+          "orcid.query",
+          "infoscience.rag",
+          "ethz.rag",
+          "orcid.search",
+          "renkulab.search",
+          "snsf.search",
+          "disciplines.search",
+          "sources.remote"
+        ],
+        "org_agent": [
+          "web.fetch",
+          "github.organization",
+          "organization.identity",
+          "infoscience.rag",
+          "ethz.rag",
+          "ror.search",
+          "snsf.search",
+          "huggingface.search",
+          "openalex.search",
+          "renkulab.search",
+          "federated.rag",
+          "disciplines.search",
+          "sources.remote"
+        ],
+        "article_agent": [
+          "web.fetch",
+          "infoscience.publications",
+          "infoscience.rag",
+          "ethz.rag",
+          "openalex.search",
+          "zenodo.search",
+          "zenodo.records",
+          "oamonitor.search",
+          "oamonitor.records",
+          "renkulab.search",
+          "swissubase.search",
+          "disciplines.search",
+          "sources.remote"
+        ],
+        "membership_agent": [
+          "web.fetch",
+          "orcid.person",
+          "orcid.query",
+          "sources.remote"
+        ],
+        "contribution_agent": [
+          "web.fetch",
+          "sources.remote"
+        ],
+        "context_summary_agent": [
+          "corpus.grep",
+          "web.search",
+          "sources.remote"
+        ],
+        "context_scout": [
+          "corpus.grep",
+          "web.search",
+          "web.fetch",
+          "orcid.search",
+          "ror.search",
+          "infoscience.search",
+          "openalex.search",
+          "zenodo.search",
+          "oamonitor.search",
+          "ethz.search",
+          "huggingface.search",
+          "renkulab.search",
+          "snsf.search",
+          "disciplines.search",
+          "sources.remote"
+        ]
+      }
+    },
+    "fingerprint": "54bcd47ee1dc2919887314a9743f7fe6d315fbd7dd7b948fc117714120d00d40",
+    "code_fingerprint": "163a653ba4b87cc27ab34e69e4c8eacf9f9a2b2160c9cf227ce4930517686e04",
+    "provider_mode": "live",
+    "settings": {
+      "SOURCES_API_URL": "http://gme-live-sources-20261111:8080",
+      "V2_LINK_VERACITY_ENABLED": "false",
+      "V2_CONTEXT_SUMMARY_SCOUT_MODE": "true",
+      "V2_PROVIDER_CACHE_ENABLED": "false",
+      "V2_PIPELINE_CACHE_ENABLED": "false",
+      "V2_APPLY_CRITIC_PRUNING": "false",
+      "V2_CONCEPT_TAGGING_ENABLED": "false",
+      "V2_HYBRID_REFINER_ENABLED": "true",
+      "V2_CANONICAL_OUTPUT_ENABLED": "false",
+      "V2_SUBSTRATE_ENABLED": "false",
+      "V2_EXPAND_OWNED_REPOS": "false",
+      "V2_MAX_REPO_FANOUT_ORG": null,
+      "V2_MAX_REPO_FANOUT_USER": null,
+      "V2_LLM_REQUEST_LIMIT": "4",
+      "V2_LLM_TOOL_CALLS_LIMIT": "6",
+      "V2_LLM_TIMEOUT_SECONDS": "60"
+    },
+    "model_configs": {
+      "run_llm_analysis": [
+        {
+          "provider": "openai-compatible",
+          "model": "openai/gpt-oss-120b",
+          "base_url": "https://inference-rcp.epfl.ch/v1",
+          "api_key_env": "RCP_TOKEN",
+          "max_retries": 0,
+          "temperature": 0.2,
+          "max_tokens": 6000,
+          "timeout": 60,
+          "allow_tools": true
+        }
+      ],
+      "run_user_enrichment": [
+        {
+          "provider": "openai-compatible",
+          "model": "openai/gpt-oss-120b",
+          "base_url": "https://inference-rcp.epfl.ch/v1",
+          "api_key_env": "RCP_TOKEN",
+          "max_retries": 0,
+          "temperature": 0.1,
+          "max_tokens": 6000,
+          "timeout": 60
+        }
+      ],
+      "run_organization_enrichment": [
+        {
+          "provider": "openai-compatible",
+          "model": "openai/gpt-oss-120b",
+          "base_url": "https://inference-rcp.epfl.ch/v1",
+          "api_key_env": "RCP_TOKEN",
+          "max_retries": 0,
+          "temperature": 0.1,
+          "max_tokens": 6000,
+          "timeout": 60
+        }
+      ],
+      "run_linked_entities_enrichment": [
+        {
+          "provider": "openai-compatible",
+          "model": "openai/gpt-oss-120b",
+          "base_url": "https://inference-rcp.epfl.ch/v1",
+          "api_key_env": "RCP_TOKEN",
+          "max_retries": 0,
+          "temperature": 0.1,
+          "max_tokens": 6000,
+          "timeout": 60,
+          "allow_tools": true
+        }
+      ],
+      "run_epfl_assessment": [
+        {
+          "provider": "openai-compatible",
+          "model": "openai/gpt-oss-120b",
+          "base_url": "https://inference-rcp.epfl.ch/v1",
+          "api_key_env": "RCP_TOKEN",
+          "max_retries": 0,
+          "temperature": 0.1,
+          "max_tokens": 6000,
+          "timeout": 60,
+          "allow_tools": false
+        }
+      ],
+      "run_repository_classifier": [
+        {
+          "provider": "openai-compatible",
+          "model": "openai/gpt-oss-120b",
+          "base_url": "https://inference-rcp.epfl.ch/v1",
+          "api_key_env": "RCP_TOKEN",
+          "max_retries": 0,
+          "temperature": 0.1,
+          "max_tokens": 6000,
+          "timeout": 60,
+          "allow_tools": false
+        }
+      ],
+      "run_organization_identifier": [
+        {
+          "provider": "openai-compatible",
+          "model": "openai/gpt-oss-120b",
+          "base_url": "https://inference-rcp.epfl.ch/v1",
+          "api_key_env": "RCP_TOKEN",
+          "max_retries": 0,
+          "temperature": 0.1,
+          "max_tokens": 6000,
+          "timeout": 60,
+          "allow_tools": false
+        }
+      ],
+      "run_url_validation": [
+        {
+          "provider": "openai-compatible",
+          "model": "openai/gpt-oss-120b",
+          "base_url": "https://inference-rcp.epfl.ch/v1",
+          "api_key_env": "RCP_TOKEN",
+          "max_retries": 0,
+          "temperature": 0.1,
+          "max_tokens": 6000,
+          "timeout": 60,
+          "allow_tools": false
+        }
+      ],
+      "run_context_compiler": [
+        {
+          "provider": "openai-compatible",
+          "model": "openai/gpt-oss-120b",
+          "base_url": "https://inference-rcp.epfl.ch/v1",
+          "api_key_env": "RCP_TOKEN",
+          "max_retries": 0,
+          "temperature": 0.2,
+          "max_tokens": 6000,
+          "timeout": 60,
+          "allow_tools": false
+        }
+      ],
+      "run_structured_output": [
+        {
+          "provider": "openai-compatible",
+          "model": "openai/gpt-oss-120b",
+          "base_url": "https://inference-rcp.epfl.ch/v1",
+          "api_key_env": "RCP_TOKEN",
+          "max_retries": 0,
+          "temperature": 0.2,
+          "max_tokens": 6000,
+          "timeout": 60,
+          "allow_tools": false
+        }
+      ],
+      "run_epfl_final_checker": [
+        {
+          "provider": "openai-compatible",
+          "model": "openai/gpt-oss-120b",
+          "base_url": "https://inference-rcp.epfl.ch/v1",
+          "api_key_env": "RCP_TOKEN",
+          "max_retries": 0,
+          "temperature": 0.1,
+          "max_tokens": 6000,
+          "timeout": 60,
+          "allow_tools": false
+        }
+      ],
+      "run_linked_entities_searcher": [
+        {
+          "provider": "openai-compatible",
+          "model": "openai/gpt-oss-120b",
+          "base_url": "https://inference-rcp.epfl.ch/v1",
+          "api_key_env": "RCP_TOKEN",
+          "max_retries": 0,
+          "temperature": 0.1,
+          "max_tokens": 6000,
+          "timeout": 60,
+          "allow_tools": true
+        }
+      ],
+      "run_user_context_compiler": [
+        {
+          "provider": "openai-compatible",
+          "model": "openai/gpt-oss-120b",
+          "base_url": "https://inference-rcp.epfl.ch/v1",
+          "api_key_env": "RCP_TOKEN",
+          "max_retries": 0,
+          "temperature": 0.2,
+          "max_tokens": 6000,
+          "timeout": 60,
+          "allow_tools": true
+        }
+      ],
+      "run_user_structured_output": [
+        {
+          "provider": "openai-compatible",
+          "model": "openai/gpt-oss-120b",
+          "base_url": "https://inference-rcp.epfl.ch/v1",
+          "api_key_env": "RCP_TOKEN",
+          "max_retries": 0,
+          "temperature": 0.2,
+          "max_tokens": 6000,
+          "timeout": 60,
+          "allow_tools": false
+        }
+      ],
+      "run_user_classifier": [
+        {
+          "provider": "openai-compatible",
+          "model": "openai/gpt-oss-120b",
+          "base_url": "https://inference-rcp.epfl.ch/v1",
+          "api_key_env": "RCP_TOKEN",
+          "max_retries": 0,
+          "temperature": 0.1,
+          "max_tokens": 6000,
+          "timeout": 60,
+          "allow_tools": false
+        }
+      ],
+      "run_organization_context_compiler": [
+        {
+          "provider": "openai-compatible",
+          "model": "openai/gpt-oss-120b",
+          "base_url": "https://inference-rcp.epfl.ch/v1",
+          "api_key_env": "RCP_TOKEN",
+          "max_retries": 0,
+          "temperature": 0.2,
+          "max_tokens": 6000,
+          "timeout": 60,
+          "allow_tools": true
+        }
+      ],
+      "run_organization_structured_output": [
+        {
+          "provider": "openai-compatible",
+          "model": "openai/gpt-oss-120b",
+          "base_url": "https://inference-rcp.epfl.ch/v1",
+          "api_key_env": "RCP_TOKEN",
+          "max_retries": 0,
+          "temperature": 0.2,
+          "max_tokens": 6000,
+          "timeout": 60,
+          "allow_tools": false
+        }
+      ],
+      "run_organization_classifier": [
+        {
+          "provider": "openai-compatible",
+          "model": "openai/gpt-oss-120b",
+          "base_url": "https://inference-rcp.epfl.ch/v1",
+          "api_key_env": "RCP_TOKEN",
+          "max_retries": 0,
+          "temperature": 0.1,
+          "max_tokens": 6000,
+          "timeout": 60,
+          "allow_tools": false
+        }
+      ]
+    }
+  },
+  "substrate": null
+}

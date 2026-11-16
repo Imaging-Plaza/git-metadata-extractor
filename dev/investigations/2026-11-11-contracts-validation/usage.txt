@@ -1,0 +1,58 @@
+Local contracts and validation changes — 2026-11-11
+
+Optional external sources service
+Set these in the environment used to launch the extractor:
+  SOURCES_API_URL=http://gme-sources:8080
+  SOURCES_API_TOKEN=<the sources service API_TOKEN>
+  SOURCES_API_TIMEOUT_SECONDS=30
+
+The URL above assumes both services share a Docker network. From the host,
+use http://127.0.0.1:8080 (or the configured SOURCES_PORT). The sources token
+is explicit and separate from the extractor's API_TOKEN. Timeout is positive
+and at most 300 seconds. No secret files or running service settings were
+changed by this work.
+
+With remote sources configured, provider wiring creates the HTTP client instead
+of the default local RAG providers, and Gunicorn skips local index bootstrap.
+Explicitly injected providers remain caller-owned overrides. Without a sources
+URL, existing local-provider behavior remains available. Remote configuration
+errors fail explicitly rather than silently falling back to local stores.
+
+Default agent tool sets gain list_sources and search_sources when the client
+is present. Custom tool profiles can select the sources.remote bundle or its
+sources.manifest and sources.search entries. Search accepts an index and a
+typed request with query, top_k, optional candidate_k, target and filter_payload.
+Outcomes distinguish no matches from authorization, availability, unsupported
+endpoint and malformed-response failures. Query evidence includes retrieved IDs.
+
+Current server limitations: manifest presence does not guarantee HTTP search
+support; there are no record/chunk hydration endpoints. Snapshot and embedding
+metadata can only be preserved when supplied by the server. The pinned sources
+library remains installed for legacy providers and shared helpers. This is a
+read-side HTTP integration, not complete removal of all library coupling.
+
+Internal extension contracts
+PipelineState now uses typed artifacts for production stage results and typed
+stage_outcomes for every invocation, including skips, failures and cancellation.
+Repeated stage names retain separate outcomes. The existing timing map remains
+compatible. Extension extras must be JSON values. Runtime clients are excluded
+from model serialization. ProfileExecution.response is a V2ExtractResponse;
+serialize with model_dump(mode="json") at an artifact boundary.
+
+Validation behavior
+Strict and permissive JSON Schema validation now check declared URI formats.
+Install the declared jsonschema[format-nongpl] dependency; absent URI support
+fails explicitly. Nested internal metadata is excluded from validation and
+normal JSON/JSON-LD output, including excluded entities. Permissive validation
+removes unexpected fields at the correct nested object.
+
+Canonical publication refuses to write when SHACL validation cannot run.
+Reporting-only validation and the extraction API's warning-only SHACL gate
+retain their existing policies. Generated ontology models now enforce declared
+list cardinalities. Debug JSON-LD internal-field namespacing remains available.
+
+Compatibility
+Python support is explicitly >=3.10,<3.14: the pinned generator and Pydantic
+versions cannot resolve together on Python 3.14+. Verification used Python 3.12;
+the lock check used Python 3.11. Public endpoint shapes and stage ordering remain
+unchanged, but leaked internal fields are intentionally removed from output.

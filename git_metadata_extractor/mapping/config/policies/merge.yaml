@@ -1,0 +1,81 @@
+schema_version: 1
+name: policies.merge
+version: '1'
+per_run_properties:
+- pulse:partOfRun
+dispositions:
+  org:hasMembership: union
+  org:hasUnit: union
+  org:unitOf: union
+  pulse:discipline: union
+  pulse:hasAuthoredArticle: union
+  pulse:hasContribution: union
+  pulse:hasDeposit: union
+  pulse:hasOrganizationProfile: union
+  pulse:hasProfile: union
+  pulse:owns: union
+  pulse:platformUsername: union
+  pulse:projectOutput: union
+  schema:author: union
+  schema:citation: union
+  schema:email: union
+  schema:funder: union
+  schema:member: union
+  schema:programmingLanguage: union
+  schema:sourceOrganization: union
+  schema:url: union
+  pulse:doi: select
+  pulse:orcidIdentifier: select
+  pulse:organizationType: select
+  pulse:publicationType: select
+  pulse:repositoryType: select
+  pulse:ror: select
+  schema:dateCreated: select
+  schema:license: select
+  schema:name: select
+  time:hasBeginning: select
+  pulse:contributionCount: max
+  pulse:firstContributionDate: min
+  pulse:lastContributionDate: max
+resolvers:
+  schema:Person:
+    match_keys:
+    - pulse:orcidIdentifier
+    - pulse:hasProfile
+    - schema:email
+    id_priority:
+    - pulse:orcidIdentifier
+    same_as: pulse:samePersonAs
+    # Legacy flat person records can carry email before profile projection.
+    legacy_match_contracts:
+      schema:email: canonical.platform_profile
+  org:Organization:
+    match_keys:
+    - pulse:ror
+    - pulse:hasOrganizationProfile
+    id_priority:
+    - pulse:ror
+    same_as: pulse:sameOrganizationAs
+  schema:ScholarlyArticle:
+    match_keys:
+    - pulse:doi
+    - pulse:hasDeposit
+    id_priority:
+    - pulse:doi
+  schema:SoftwareSourceCode:
+    match_keys:
+    - pulse:repositoryHandle
+  pulse:PlatformProfile:
+    match_keys: []
+  pulse:OrganizationProfile:
+    match_keys: []
+  pulse:Deposit:
+    match_keys: []
+  pulse:Contribution:
+    match_keys: []
+  org:Membership:
+    match_keys: []
+iri_templates:
+  pulse:orcidIdentifier: https://orcid.org/{}
+  pulse:doi: https://doi.org/{}
+  pulse:ror: '{}'

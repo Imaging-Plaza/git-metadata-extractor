@@ -91,7 +91,7 @@ def validate_org_github_handles(
 ) -> tuple[ReconciledEntities, list[str]]:
     """Stamp or drop `@handle`-named organizations using GitHub.
 
-    Returns the same ``reconciled`` (mutated in place — the dataclass is
+    Returns the same ``reconciled`` (mutated in place — the model is
     not frozen) plus the list of warnings emitted by this stage.
     """
     warnings: list[str] = []

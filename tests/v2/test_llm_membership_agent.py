@@ -95,6 +95,30 @@ def test_llm_membership_agent_validates_payload_and_exposes_model_metadata(
     assert result.tokens_completion == EXPECTED_COMPLETION_TOKENS
     assert result.stats["agent_runtime"] == "llm"
     assert result.stats["membership_count"] == 1
+    # force_server_uuid: the uuid the LLM emitted never survives.
+    assert result.data["identifiers"]["uuid"] != _valid_membership_payload()["identifiers"]["uuid"]
+
+
+def test_llm_membership_agent_swaps_inverted_dates() -> None:
+    """ORCID returns some employments with start and end reversed, and the
+    LLM copies them through. `time:hasBeginning` must not fall after
+    `time:hasEnd` (the Membership shape's `sh:lessThanOrEquals`)."""
+    payload = _valid_membership_payload()
+    payload.update({"time:hasBeginning": "2023-06-30", "time:hasEnd": "2019-01-01"})
+    agent = LLMMembershipAgentV2(llm_runtime=_FakeLLMRuntime(payload))
+
+    result = asyncio.run(
+        agent.run(
+            {
+                "membership_seed": "alice",
+                "known_organizations": [{"id": "org:epfl", "type": "org:Organization"}],
+            },
+            _providers(),
+        ),
+    )
+
+    assert result.data["time:hasBeginning"] == "2019-01-01"
+    assert result.data["time:hasEnd"] == "2023-06-30"
 
 
 def test_llm_membership_agent_propagates_llm_runtime_error() -> None:

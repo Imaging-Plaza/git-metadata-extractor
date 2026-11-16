@@ -13,40 +13,17 @@ from git_metadata_extractor.agents.llm._verdict_cache import (
     get_cached_agent_verdict,
     store_agent_verdict,
 )
-from git_metadata_extractor.agents.llm.agent_tools.disciplines import list_disciplines_tool
-from git_metadata_extractor.agents.llm.agent_tools.epfl_graph_rag import (
-    make_epfl_graph_rag_search_tool,
+from git_metadata_extractor.agents.llm.prompt_context import (
+    append_runtime_prompt_context,
 )
-from git_metadata_extractor.agents.llm.agent_tools.federated_rag import (
-    make_federated_rag_lookup_tool,
-    make_federated_rag_search_tool,
-)
-from git_metadata_extractor.agents.llm.agent_tools.github_rag import (
-    make_github_rag_search_tool,
-)
-from git_metadata_extractor.agents.llm.agent_tools.huggingface_lineage import (
-    make_huggingface_lineage_tool,
-)
-from git_metadata_extractor.agents.llm.agent_tools.huggingface_rag import (
-    make_huggingface_rag_search_tool,
-)
-from git_metadata_extractor.agents.llm.agent_tools.query_dependencies import (
-    make_query_dependencies_tool,
-)
-from git_metadata_extractor.agents.llm.agent_tools.renkulab_rag import (
-    make_renkulab_rag_search_tool,
-)
-from git_metadata_extractor.agents.llm.agent_tools.selenium_fetch import (
-    make_fetch_link_content_tool,
-)
-from git_metadata_extractor.agents.llm.prompt_context import append_runtime_prompt_context
 from git_metadata_extractor.agents.llm.runtime import (
     LLMRuntimeError,
     V2LLMRuntime,
 )
 from git_metadata_extractor.agents.models import AgentResult, ProviderSet, generate_uuid
-from git_metadata_extractor.providers.cache import ProviderCache
+from git_metadata_extractor.agents.tool_catalog import ToolContext, resolve_tools
 from git_metadata_extractor.observation.query_log import stamp_current_agent
+from git_metadata_extractor.providers.cache import ProviderCache
 from git_metadata_extractor.schema.models.agent import AgentRepositoryShape
 from git_metadata_extractor.schema.models.strict import RepositoryModel
 
@@ -238,23 +215,7 @@ class LLMRepositoryAgentV2:
         user_prompt = _USER_PROMPT_TEMPLATE.replace("{context_json}", context_json)
         user_prompt = append_runtime_prompt_context(user_prompt, context)
 
-        tools = [
-            list_disciplines_tool,
-            make_fetch_link_content_tool(self._cache),
-            make_query_dependencies_tool(providers.github),
-        ]
-        if providers.huggingface_rag is not None:
-            tools.append(make_huggingface_rag_search_tool(providers.huggingface_rag))
-            tools.append(make_huggingface_lineage_tool(providers.huggingface_rag))
-        if providers.renkulab_rag is not None:
-            tools.append(make_renkulab_rag_search_tool(providers.renkulab_rag))
-        if providers.github_rag is not None:
-            tools.append(make_github_rag_search_tool(providers.github_rag))
-        if providers.epfl_graph_rag is not None:
-            tools.append(make_epfl_graph_rag_search_tool(providers.epfl_graph_rag))
-        if providers.federated_rag is not None:
-            tools.append(make_federated_rag_search_tool(providers.federated_rag))
-            tools.append(make_federated_rag_lookup_tool(providers.federated_rag))
+        tools = resolve_tools("repo_agent", ToolContext(providers=providers, cache=self._cache, context=context))
 
         try:
             llm_result = await self._llm_runtime.run_json_prompt(

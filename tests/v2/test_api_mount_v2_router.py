@@ -6,7 +6,6 @@ from typing import Any
 from httpx import ASGITransport, AsyncClient
 
 from git_metadata_extractor.app import app as main_app
-from git_metadata_extractor.app import index
 from git_metadata_extractor.agents import ProviderSet
 from git_metadata_extractor.providers.mock_github import MockGitHubProvider
 from git_metadata_extractor.providers.mock_infoscience import MockInfoscienceProvider
@@ -45,14 +44,6 @@ def test_main_app_serves_v2_extract_route() -> None:
 
     assert status_code == HTTP_OK
     assert payload["detected_type"] == "repository"
-
-
-def test_main_app_welcome_available() -> None:
-    route_paths = {route.path for route in main_app.routes}
-    payload = index()
-
-    assert "/" in route_paths
-    assert "title" in payload
 
 
 def test_main_app_serves_no_v1_routes() -> None:

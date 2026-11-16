@@ -17,9 +17,10 @@ import argparse
 import asyncio
 import json
 import logging
-from dataclasses import dataclass
 from time import perf_counter
 from typing import Literal
+
+from git_metadata_extractor.models import InternalModel
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 
@@ -27,15 +28,16 @@ from git_metadata_extractor.agents.llm.person import LLMPersonAgentV2
 from git_metadata_extractor.agents.llm.repository import LLMRepositoryAgentV2
 from git_metadata_extractor.agents.models import AgentResult, ProviderSet
 from git_metadata_extractor.dependencies import _default_provider_set
-from git_metadata_extractor.providers.detection.github_url_classifier import classify_github_url
 from git_metadata_extractor.pipeline.stages import gather_context
+from git_metadata_extractor.providers.detection.github_url_classifier import (
+    classify_github_url,
+)
 
 _SEP = "─" * 60
 _SEP_THIN = "·" * 60
 
 
-@dataclass(slots=True)
-class _PersonExecutionOutcome:
+class _PersonExecutionOutcome(InternalModel):
     username: str
     status: Literal["ok", "timeout", "error"]
     elapsed_seconds: float

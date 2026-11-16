@@ -1,0 +1,52 @@
+YAML mappings implementation plan and accepted design
+
+Goal: move field mappings into versioned YAML validated by Pydantic, retain
+Python for registered transforms and identity/inference algorithms.
+User selected YAML after the alternatives and architecture were presented.
+Execute inline using executing-plans and TDD; keep everything local/uncommitted.
+
+Architecture: package mapping/config/{github,raw}/*.yaml alongside the engine,
+so wheels and Docker use exactly the same configuration independent of CWD.
+Each document declares name, version, source contract, target contract and field
+rules. Rules use ordered input paths, registered transforms and missing policies.
+Existing generated models define allowed public target properties. Internal
+metadata is explicitly declared separately and never accepted on raw contracts.
+No eval/import expressions or arbitrary callables in YAML; duplicate keys fail.
+Output type/cardinality validation stays in existing schema/SHACL gates.
+
+Task 1: mapping/{models,registry,engine,checks}.py and __init__.py, packaged YAML.
+Write tests for unknown transforms/targets, duplicate YAML, missing/null versus
+false/zero, ordered fallback, URI conversion, immutability and schema inventory.
+Observe failure, implement, verify. Derive declared targets from generated
+models; report ontology/schema constraints via a read-only CLI inventory.
+
+Task 2: migrate GitHub repository direct fields and the three raw detail maps.
+Write semantic regression for size KB not being a file count, projection and
+agent tests. Keep complex parsers, identity rules, visibility and passthrough
+logic in existing modules. Remove invalid size-to-file-count mapping; leave size
+in internal metadata. No ontology/public API version switch in this change.
+
+Task 3: include mapping/contract fingerprints in pipeline/verdict cache keys,
+benchmark manifests and mapping provenance activities. Record mapping name,
+version, source contract and fingerprint in the existing provenance graph.
+Test cache changes and provenance serialization without leaking internal fields.
+
+Task 4: package YAML resources; document edit/check/regenerate workflow, generate
+mapping inventory, run full offline suite and both model-generation checks,
+scoped lint, packaging inspection and independent final review.
+
+Review focus: duplicate YAML silently overriding a field; wheel missing config;
+ordered fallbacks dropping false/zero; graph units wrong despite valid types;
+cached outputs surviving a mapping/contract change.
+
+Limits: this is the first working migration slice. ROR/ORCID/Infoscience agent
+payloads, merge policies and canonical identity logic remain Python. Existing
+v2 JSON contracts and v3 ontology models remain explicit separate targets;
+collapsing them requires a public-contract migration, not a mapping refactor.
+
+Execution ledger
+All four tasks complete for the declared first slice. 1899 tests passed,
+1 skipped; both model-generation checks, lock check, mapping CLI and installed
+wheel check passed. Independent review found no blockers; its suggested actual
+YAML fingerprint and pipeline-cache regression tests were added. The packaged
+config/README.txt is the edit/update guide. No commits or pushes.

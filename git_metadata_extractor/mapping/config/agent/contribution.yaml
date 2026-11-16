@@ -1,0 +1,17 @@
+schema_version: 1
+name: agent.contribution
+version: '1'
+source_contract: prepared.agent.contribution
+target_contract: agent.contribution
+fields:
+  id: {sources: [id], empty: preserve, missing: 'null'}
+  type: {value: 'pulse:Contribution', empty: preserve, missing: 'null'}
+  shacl: {value: 'pulse:ContributionShape', empty: preserve, missing: 'null'}
+  identifiers.pulse:composite: {sources: [identifiers_pulse_composite], empty: preserve, missing: 'null'}
+  identifiers.uuid: {sources: [identifiers_uuid], empty: preserve, missing: 'null'}
+  idSource: {value: 'pulse:composite', empty: preserve, missing: 'null'}
+  pulse:contributionTo: {sources: [contributionTo], empty: preserve, missing: 'null'}
+  pulse:contributionCount: {sources: [contributionCount], empty: preserve, missing: 'null'}
+  pulse:firstContributionDate: {sources: [firstContributionDate], empty: preserve, missing: 'null'}
+  pulse:lastContributionDate: {sources: [lastContributionDate], empty: preserve, missing: 'null'}
+  schema:author: {sources: [author], empty: preserve, missing: 'null'}

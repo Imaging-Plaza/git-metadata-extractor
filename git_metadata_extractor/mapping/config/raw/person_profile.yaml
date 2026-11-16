@@ -1,0 +1,16 @@
+schema_version: 1
+name: raw.person_profile
+version: '2'
+source_contract: extractor.v2.entity
+target_contract: raw.person_profile
+fields:
+  schema:image: {sources: [_avatar_url], transform: web_iri}
+  schema:url: {sources: [_blog], transform: web_iri}
+  pulse:company: {sources: [_company]}
+  pulse:followerCount: {sources: [_followers_count]}
+  pulse:followingCount: {sources: [_following_count]}
+  schema:dateCreated: {sources: [_github_created_at]}
+  schema:dateModified: {sources: [_github_updated_at]}
+  pulse:location: {sources: [_location]}
+  pulse:publicRepositoryCount: {sources: [_public_repos]}
+  pulse:biography: {sources: [_bio]}

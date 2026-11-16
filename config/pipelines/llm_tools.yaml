@@ -1,0 +1,21 @@
+schema_version: 1
+name: llm-repository-tools
+version: '1'
+runtime: llm
+max_concurrent_agents: 4
+collectors:
+  - component: github.context
+toolsets:
+  repo_agent:
+    include_defaults: true
+    tools:
+      - component: github.repository
+        options:
+          max_chars: 12000
+  article_agent:
+    # A small alternative toolset for benchmark comparisons.
+    include_defaults: false
+    tools:
+      - component: github.repository
+      - component: publications.search
+        required: false

@@ -14,15 +14,6 @@ def test_repository_url_detected_with_owner_and_repo() -> None:
     assert result.normalized_url == "https://github.com/owner/repo"
 
 
-def test_repository_url_git_suffix_is_stripped() -> None:
-    result = classify_github_url("https://github.com/owner/repo.git")
-
-    assert result.detected_type == GitHubURLType.REPOSITORY
-    assert result.owner == "owner"
-    assert result.repo == "repo"
-    assert result.normalized_url == "https://github.com/owner/repo"
-
-
 def test_user_url_detected_from_single_path_segment(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

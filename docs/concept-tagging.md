@@ -134,7 +134,7 @@ git_metadata_extractor/pipeline/stages/__init__.py           # re-exports run_co
 git_metadata_extractor/api/extract.py                        # wires the stage into the v2 pipeline
 .env.example                                                 # documents all the V2_CONCEPT_TAGGING_* knobs
 
-# in the open-pulse-sources repo (installed as the open_pulse_sources library):
+# in dev/open-pulse-sources (called through its HTTP operations):
 open_pulse_sources/module/epfl_graph/ontology.py         # /ontology/* wrappers (epfl_graph backend)
 open_pulse_sources/module/epfl_graph/openalex_related.py  # publications / people / units helpers
 ```

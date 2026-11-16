@@ -1,0 +1,739 @@
+{
+ "request": {
+  "url": "https://api.deps.dev/v3alpha/systems/pypi/packages/gimie/versions/0.4.0:dependencies"
+ },
+ "captured_at": "2026-08-07T05:59:18Z",
+ "status_code": 200,
+ "response": {
+  "nodes": [
+   {
+    "versionKey": {
+     "system": "PYPI",
+     "name": "gimie",
+     "version": "0.4.0"
+    },
+    "bundled": false,
+    "relation": "SELF",
+    "errors": []
+   },
+   {
+    "versionKey": {
+     "system": "PYPI",
+     "name": "cachetools",
+     "version": "7.1.7"
+    },
+    "bundled": false,
+    "relation": "INDIRECT",
+    "errors": []
+   },
+   {
+    "versionKey": {
+     "system": "PYPI",
+     "name": "calamus",
+     "version": "0.4.3"
+    },
+    "bundled": false,
+    "relation": "DIRECT",
+    "errors": []
+   },
+   {
+    "versionKey": {
+     "system": "PYPI",
+     "name": "certifi",
+     "version": "2026.7.22"
+    },
+    "bundled": false,
+    "relation": "INDIRECT",
+    "errors": []
+   },
+   {
+    "versionKey": {
+     "system": "PYPI",
+     "name": "cfgv",
+     "version": "3.5.0"
+    },
+    "bundled": false,
+    "relation": "INDIRECT",
+    "errors": []
+   },
+   {
+    "versionKey": {
+     "system": "PYPI",
+     "name": "charset-normalizer",
+     "version": "3.4.9"
+    },
+    "bundled": false,
+    "relation": "INDIRECT",
+    "errors": []
+   },
+   {
+    "versionKey": {
+     "system": "PYPI",
+     "name": "click",
+     "version": "8.4.2"
+    },
+    "bundled": false,
+    "relation": "INDIRECT",
+    "errors": []
+   },
+   {
+    "versionKey": {
+     "system": "PYPI",
+     "name": "distlib",
+     "version": "0.4.3"
+    },
+    "bundled": false,
+    "relation": "INDIRECT",
+    "errors": []
+   },
+   {
+    "versionKey": {
+     "system": "PYPI",
+     "name": "filelock",
+     "version": "3.32.2"
+    },
+    "bundled": false,
+    "relation": "INDIRECT",
+    "errors": []
+   },
+   {
+    "versionKey": {
+     "system": "PYPI",
+     "name": "frozendict",
+     "version": "2.4.7"
+    },
+    "bundled": false,
+    "relation": "INDIRECT",
+    "errors": []
+   },
+   {
+    "versionKey": {
+     "system": "PYPI",
+     "name": "gitdb",
+     "version": "4.0.12"
+    },
+    "bundled": false,
+    "relation": "INDIRECT",
+    "errors": []
+   },
+   {
+    "versionKey": {
+     "system": "PYPI",
+     "name": "gitpython",
+     "version": "3.1.58"
+    },
+    "bundled": false,
+    "relation": "INDIRECT",
+    "errors": []
+   },
+   {
+    "versionKey": {
+     "system": "PYPI",
+     "name": "html5lib",
+     "version": "1.1.0"
+    },
+    "bundled": false,
+    "relation": "INDIRECT",
+    "errors": []
+   },
+   {
+    "versionKey": {
+     "system": "PYPI",
+     "name": "identify",
+     "version": "2.6.19"
+    },
+    "bundled": false,
+    "relation": "INDIRECT",
+    "errors": []
+   },
+   {
+    "versionKey": {
+     "system": "PYPI",
+     "name": "idna",
+     "version": "3.18.0"
+    },
+    "bundled": false,
+    "relation": "INDIRECT",
+    "errors": []
+   },
+   {
+    "versionKey": {
+     "system": "PYPI",
+     "name": "importlib",
+     "version": "1.0.4"
+    },
+    "bundled": false,
+    "relation": "DIRECT",
+    "errors": []
+   },
+   {
+    "versionKey": {
+     "system": "PYPI",
+     "name": "isodate",
+     "version": "0.6.1"
+    },
+    "bundled": false,
+    "relation": "INDIRECT",
+    "errors": []
+   },
+   {
+    "versionKey": {
+     "system": "PYPI",
+     "name": "lazy-object-proxy",
+     "version": "1.12.0"
+    },
+    "bundled": false,
+    "relation": "INDIRECT",
+    "errors": []
+   },
+   {
+    "versionKey": {
+     "system": "PYPI",
+     "name": "lizard",
+     "version": "1.23.0"
+    },
+    "bundled": false,
+    "relation": "INDIRECT",
+    "errors": []
+   },
+   {
+    "versionKey": {
+     "system": "PYPI",
+     "name": "lxml",
+     "version": "6.1.1"
+    },
+    "bundled": false,
+    "relation": "INDIRECT",
+    "errors": []
+   },
+   {
+    "versionKey": {
+     "system": "PYPI",
+     "name": "marshmallow",
+     "version": "3.23.3"
+    },
+    "bundled": false,
+    "relation": "INDIRECT",
+    "errors": []
+   },
+   {
+    "versionKey": {
+     "system": "PYPI",
+     "name": "nodeenv",
+     "version": "1.10.0"
+    },
+    "bundled": false,
+    "relation": "INDIRECT",
+    "errors": []
+   },
+   {
+    "versionKey": {
+     "system": "PYPI",
+     "name": "owlrl",
+     "version": "6.0.2"
+    },
+    "bundled": false,
+    "relation": "INDIRECT",
+    "errors": []
+   },
+   {
+    "versionKey": {
+     "system": "PYPI",
+     "name": "packaging",
+     "version": "26.3.0"
+    },
+    "bundled": false,
+    "relation": "INDIRECT",
+    "errors": []
+   },
+   {
+    "versionKey": {
+     "system": "PYPI",
+     "name": "pathspec",
+     "version": "1.1.1"
+    },
+    "bundled": false,
+    "relation": "INDIRECT",
+    "errors": []
+   },
+   {
+    "versionKey": {
+     "system": "PYPI",
+     "name": "platformdirs",
+     "version": "4.11.0"
+    },
+    "bundled": false,
+    "relation": "INDIRECT",
+    "errors": []
+   },
+   {
+    "versionKey": {
+     "system": "PYPI",
+     "name": "pre-commit",
+     "version": "3.8.0"
+    },
+    "bundled": false,
+    "relation": "DIRECT",
+    "errors": []
+   },
+   {
+    "versionKey": {
+     "system": "PYPI",
+     "name": "prettytable",
+     "version": "2.5.0"
+    },
+    "bundled": false,
+    "relation": "INDIRECT",
+    "errors": []
+   },
+   {
+    "versionKey": {
+     "system": "PYPI",
+     "name": "pydriller",
+     "version": "2.10.0"
+    },
+    "bundled": false,
+    "relation": "DIRECT",
+    "errors": []
+   },
+   {
+    "versionKey": {
+     "system": "PYPI",
+     "name": "pygments",
+     "version": "2.20.0"
+    },
+    "bundled": false,
+    "relation": "INDIRECT",
+    "errors": []
+   },
+   {
+    "versionKey": {
+     "system": "PYPI",
+     "name": "pyld",
+     "version": "2.0.4"
+    },
+    "bundled": false,
+    "relation": "INDIRECT",
+    "errors": []
+   },
+   {
+    "versionKey": {
+     "system": "PYPI",
+     "name": "pyparsing",
+     "version": "3.3.2"
+    },
+    "bundled": false,
+    "relation": "INDIRECT",
+    "errors": []
+   },
+   {
+    "versionKey": {
+     "system": "PYPI",
+     "name": "pyshacl",
+     "version": "0.20.0"
+    },
+    "bundled": false,
+    "relation": "DIRECT",
+    "errors": []
+   },
+   {
+    "versionKey": {
+     "system": "PYPI",
+     "name": "python-discovery",
+     "version": "1.5.1"
+    },
+    "bundled": false,
+    "relation": "INDIRECT",
+    "errors": []
+   },
+   {
+    "versionKey": {
+     "system": "PYPI",
+     "name": "python-dotenv",
+     "version": "0.21.1"
+    },
+    "bundled": false,
+    "relation": "DIRECT",
+    "errors": []
+   },
+   {
+    "versionKey": {
+     "system": "PYPI",
+     "name": "pytz",
+     "version": "2026.3.0.post1"
+    },
+    "bundled": false,
+    "relation": "INDIRECT",
+    "errors": []
+   },
+   {
+    "versionKey": {
+     "system": "PYPI",
+     "name": "pyyaml",
+     "version": "6.0.3"
+    },
+    "bundled": false,
+    "relation": "INDIRECT",
+    "errors": []
+   },
+   {
+    "versionKey": {
+     "system": "PYPI",
+     "name": "rdflib",
+     "version": "6.3.2"
+    },
+    "bundled": false,
+    "relation": "INDIRECT",
+    "errors": []
+   },
+   {
+    "versionKey": {
+     "system": "PYPI",
+     "name": "requests",
+     "version": "2.34.2"
+    },
+    "bundled": false,
+    "relation": "DIRECT",
+    "errors": []
+   },
+   {
+    "versionKey": {
+     "system": "PYPI",
+     "name": "six",
+     "version": "1.17.0"
+    },
+    "bundled": false,
+    "relation": "INDIRECT",
+    "errors": []
+   },
+   {
+    "versionKey": {
+     "system": "PYPI",
+     "name": "smmap",
+     "version": "5.0.3"
+    },
+    "bundled": false,
+    "relation": "INDIRECT",
+    "errors": []
+   },
+   {
+    "versionKey": {
+     "system": "PYPI",
+     "name": "typer",
+     "version": "0.7.0"
+    },
+    "bundled": false,
+    "relation": "DIRECT",
+    "errors": []
+   },
+   {
+    "versionKey": {
+     "system": "PYPI",
+     "name": "types-pytz",
+     "version": "2026.3.1.20260727"
+    },
+    "bundled": false,
+    "relation": "INDIRECT",
+    "errors": []
+   },
+   {
+    "versionKey": {
+     "system": "PYPI",
+     "name": "urllib3",
+     "version": "2.7.0"
+    },
+    "bundled": false,
+    "relation": "INDIRECT",
+    "errors": []
+   },
+   {
+    "versionKey": {
+     "system": "PYPI",
+     "name": "virtualenv",
+     "version": "21.7.1"
+    },
+    "bundled": false,
+    "relation": "INDIRECT",
+    "errors": []
+   },
+   {
+    "versionKey": {
+     "system": "PYPI",
+     "name": "wcwidth",
+     "version": "0.8.2"
+    },
+    "bundled": false,
+    "relation": "INDIRECT",
+    "errors": []
+   },
+   {
+    "versionKey": {
+     "system": "PYPI",
+     "name": "webencodings",
+     "version": "0.5.1"
+    },
+    "bundled": false,
+    "relation": "INDIRECT",
+    "errors": []
+   }
+  ],
+  "edges": [
+   {
+    "fromNode": 0,
+    "toNode": 2,
+    "requirement": ">=0.4.2,<0.5.0"
+   },
+   {
+    "fromNode": 0,
+    "toNode": 15,
+    "requirement": ">=1.0.4,<2.0.0"
+   },
+   {
+    "fromNode": 0,
+    "toNode": 26,
+    "requirement": ">=3.0.0,<4.0.0"
+   },
+   {
+    "fromNode": 0,
+    "toNode": 28,
+    "requirement": ">=2.3,<3.0"
+   },
+   {
+    "fromNode": 0,
+    "toNode": 32,
+    "requirement": ">=0.20.0,<0.21.0"
+   },
+   {
+    "fromNode": 0,
+    "toNode": 34,
+    "requirement": ">=0.21.1,<0.22.0"
+   },
+   {
+    "fromNode": 0,
+    "toNode": 38,
+    "requirement": ">=2.28.2,<3.0.0"
+   },
+   {
+    "fromNode": 0,
+    "toNode": 41,
+    "requirement": ">=0.7.0,<0.8.0"
+   },
+   {
+    "fromNode": 2,
+    "toNode": 17,
+    "requirement": ">=1.4.3,<2.0.0"
+   },
+   {
+    "fromNode": 2,
+    "toNode": 20,
+    "requirement": ">=3.23.0,<3.24.0"
+   },
+   {
+    "fromNode": 2,
+    "toNode": 30,
+    "requirement": ">=2.0.2,<3.0.0"
+   },
+   {
+    "fromNode": 2,
+    "toNode": 37,
+    "requirement": ">=6.0.0,<7.0.0"
+   },
+   {
+    "fromNode": 10,
+    "toNode": 40,
+    "requirement": "<6,>=3.0.1"
+   },
+   {
+    "fromNode": 11,
+    "toNode": 10,
+    "requirement": "<5,>=4.0.1"
+   },
+   {
+    "fromNode": 12,
+    "toNode": 39,
+    "requirement": ">=1.9"
+   },
+   {
+    "fromNode": 12,
+    "toNode": 46,
+    "requirement": ""
+   },
+   {
+    "fromNode": 16,
+    "toNode": 39,
+    "requirement": ""
+   },
+   {
+    "fromNode": 18,
+    "toNode": 24,
+    "requirement": ""
+   },
+   {
+    "fromNode": 18,
+    "toNode": 29,
+    "requirement": ""
+   },
+   {
+    "fromNode": 20,
+    "toNode": 23,
+    "requirement": ">=17.0"
+   },
+   {
+    "fromNode": 22,
+    "toNode": 37,
+    "requirement": ">=6.0.2"
+   },
+   {
+    "fromNode": 26,
+    "toNode": 4,
+    "requirement": ">=2.0.0"
+   },
+   {
+    "fromNode": 26,
+    "toNode": 13,
+    "requirement": ">=1.0.0"
+   },
+   {
+    "fromNode": 26,
+    "toNode": 21,
+    "requirement": ">=0.11.1"
+   },
+   {
+    "fromNode": 26,
+    "toNode": 36,
+    "requirement": ">=5.1"
+   },
+   {
+    "fromNode": 26,
+    "toNode": 44,
+    "requirement": ">=20.10.0"
+   },
+   {
+    "fromNode": 27,
+    "toNode": 45,
+    "requirement": ""
+   },
+   {
+    "fromNode": 28,
+    "toNode": 11,
+    "requirement": ""
+   },
+   {
+    "fromNode": 28,
+    "toNode": 18,
+    "requirement": ""
+   },
+   {
+    "fromNode": 28,
+    "toNode": 35,
+    "requirement": ""
+   },
+   {
+    "fromNode": 28,
+    "toNode": 42,
+    "requirement": ""
+   },
+   {
+    "fromNode": 30,
+    "toNode": 1,
+    "requirement": ""
+   },
+   {
+    "fromNode": 30,
+    "toNode": 9,
+    "requirement": ""
+   },
+   {
+    "fromNode": 30,
+    "toNode": 19,
+    "requirement": ""
+   },
+   {
+    "fromNode": 32,
+    "toNode": 12,
+    "requirement": ">=1.1,<2"
+   },
+   {
+    "fromNode": 32,
+    "toNode": 22,
+    "requirement": ">=6.0.2,<7"
+   },
+   {
+    "fromNode": 32,
+    "toNode": 23,
+    "requirement": ">=21.3"
+   },
+   {
+    "fromNode": 32,
+    "toNode": 27,
+    "requirement": ">=2.2.1,<3.0.0"
+   },
+   {
+    "fromNode": 32,
+    "toNode": 37,
+    "requirement": ">=6.2.0,<7"
+   },
+   {
+    "fromNode": 33,
+    "toNode": 8,
+    "requirement": ">=3.15.4"
+   },
+   {
+    "fromNode": 37,
+    "toNode": 16,
+    "requirement": ">=0.6.0,<0.7.0"
+   },
+   {
+    "fromNode": 37,
+    "toNode": 31,
+    "requirement": ">=2.1.0,<4"
+   },
+   {
+    "fromNode": 38,
+    "toNode": 3,
+    "requirement": ">=2023.5.7"
+   },
+   {
+    "fromNode": 38,
+    "toNode": 5,
+    "requirement": "<4,>=2"
+   },
+   {
+    "fromNode": 38,
+    "toNode": 14,
+    "requirement": "<4,>=2.5"
+   },
+   {
+    "fromNode": 38,
+    "toNode": 43,
+    "requirement": "<3,>=1.26"
+   },
+   {
+    "fromNode": 41,
+    "toNode": 6,
+    "requirement": ">= 7.1.1, <9.0.0"
+   },
+   {
+    "fromNode": 44,
+    "toNode": 7,
+    "requirement": "<1,>=0.3.7"
+   },
+   {
+    "fromNode": 44,
+    "toNode": 8,
+    "requirement": "<4,>=3.24.2"
+   },
+   {
+    "fromNode": 44,
+    "toNode": 25,
+    "requirement": "<5,>=3.9.1"
+   },
+   {
+    "fromNode": 44,
+    "toNode": 33,
+    "requirement": ">=1.4.2"
+   }
+  ],
+  "error": ""
+ }
+}

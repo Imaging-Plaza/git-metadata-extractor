@@ -34,6 +34,7 @@ from git_metadata_extractor.pipeline.stages.reconciliation import (
     _normalize_role_value,
     _pick_membership_role,
 )
+from git_metadata_extractor.validation.schema_validation import StrictSchemaValidator
 
 ORG_TYPE = "org:Organization"
 
@@ -141,7 +142,16 @@ def test_demote_synthesizes_unit_when_parent_handle_has_no_matching_unit():
     ]
     assert len(synthesized) == 1
     assert synthesized[0]["pulse:githubOrgFollowers"] == 12
-    assert synthesized[0]["pulse:githubOrganizationHandle"] == "GeoEnergyLab-EPFL"
+    # URL form: the strict Organization schema requires
+    # `^https://github\.com/...` for this property, in all three of its
+    # locations. This assertion previously expected the bare handle, which is
+    # what let the invalid value ship.
+    assert (
+        synthesized[0]["pulse:githubOrganizationHandle"]
+        == "https://github.com/GeoEnergyLab-EPFL"
+    )
+    # ...while the display name stays bare — a name should never be a URL.
+    assert synthesized[0]["schema:name"] == "GeoEnergyLab-EPFL"
     assert synthesized[0]["org:unitOf"] == ["https://ror.org/02s376052"]
     # And the parent's hasUnit list now references the new stub.
     parent_has_unit = updated.root_entity["org:hasUnit"]
@@ -149,6 +159,37 @@ def test_demote_synthesizes_unit_when_parent_handle_has_no_matching_unit():
         "https://github.com/GeoEnergyLab-EPFL",
     }
     assert any("Synthesized github-only org unit" in w for w in warnings)
+
+
+def test_synthesized_org_unit_passes_strict_validation():
+    """A synthesized unit must satisfy the strict Organization schema.
+
+    Both handle forms are exercised: an agent may emit the bare handle or the
+    canonical URL, and the unit must come out valid either way. Concatenating
+    onto `https://github.com/` used to double-prefix the URL input.
+    """
+    for handle in ("GeoEnergyLab-EPFL", "https://github.com/GeoEnergyLab-EPFL"):
+        parent = _make_ror_parent(
+            ror_id="https://ror.org/02s376052",
+            handle=handle,
+            followers=12,
+            has_unit=[],
+        )
+        updated, _ = demote_github_props_to_units(
+            AssembledOutput(root_entity=parent, related_entities=[]),
+        )
+        units = [
+            e for e in updated.related_entities
+            if isinstance(e, dict) and e.get("_stub")
+        ]
+        assert len(units) == 1, f"{handle}: expected one synthesized unit"
+        unit = units[0]
+        assert unit["id"] == "https://github.com/GeoEnergyLab-EPFL", handle
+        assert "github.com/https" not in unit["id"], f"{handle}: double-prefixed id"
+
+        strippable = {k: v for k, v in unit.items() if not k.startswith("_")}
+        result = StrictSchemaValidator().validate_batch([("organization", strippable)])
+        assert len(result.valid_entities) == 1, (handle, result.warnings)
 
 
 def test_demote_is_noop_when_parent_has_no_github_handle():
@@ -220,8 +261,12 @@ def test_synthesize_owner_person_stub_is_a_valid_person_shape():
     assert stub["type"] == "schema:Person"
     assert stub["shacl"] == "pulse:PersonShape"
     assert stub["schema:name"] == "RossComputerGuy"
-    # PersonShape requires pulse:githubUsername among the identifiers.
-    assert stub["identifiers"]["pulse:githubUsername"] == "RossComputerGuy"
+    # `pulse:githubUsername` is URL-valued: the strict Person schema's `anyOf`
+    # requires `^https://github\.com/...`, so a bare handle fails every branch.
+    # This assertion previously hardcoded the bare handle, which is why the
+    # stub shipped invalid for 46 of the 120 corpus repositories.
+    assert stub["identifiers"]["pulse:githubUsername"] == "https://github.com/RossComputerGuy"
+    assert stub["pulse:githubUsername"] == "https://github.com/RossComputerGuy"
     assert stub["idSource"] == "pulse:githubUsername"
     # ORCID / Infoscience identifiers are explicitly nullable on a stub —
     # we never invent those.
@@ -230,6 +275,21 @@ def test_synthesize_owner_person_stub_is_a_valid_person_shape():
     # And every stub has its own uuid so two synthesised stubs never collide.
     assert isinstance(stub["identifiers"]["uuid"], str)
     assert stub["identifiers"]["uuid"]
+
+
+def test_synthesize_owner_person_stub_passes_strict_validation():
+    """The assertion the old shape test was named for but never made.
+
+    `test_synthesize_owner_person_stub_is_a_valid_person_shape` hand-checked
+    field values and never ran the validator, so a stub that the strict Person
+    schema rejects passed the suite while failing in production 46 times.
+    Validate for real here.
+    """
+    stub = _synthesize_owner_person_stub("RossComputerGuy")
+    result = StrictSchemaValidator().validate_batch([("person", stub)])
+
+    assert len(result.valid_entities) == 1, result.warnings
+    assert not result.invalid_entities
 
 
 def test_two_stubs_have_distinct_uuids():

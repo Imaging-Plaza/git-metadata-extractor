@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import re
 from copy import deepcopy
-from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlparse
 
@@ -12,7 +11,12 @@ from git_metadata_extractor.agents.models import (
     generate_uuid,
     validate_permissive,
 )
-from git_metadata_extractor.canonicalization.string_utils import normalize_string, strip_accents
+from git_metadata_extractor.canonicalization.string_utils import (
+    normalize_string,
+    strip_accents,
+)
+from git_metadata_extractor.mapping import map_fields
+from git_metadata_extractor.models import InternalModel
 
 DEFAULT_QUERY_CAP = 8
 DOI_PREFIX = "doi"
@@ -32,8 +36,7 @@ YEAR_ONLY_DATE_PATTERN = re.compile(r"^\d{4}$")
 MIN_REPOSITORY_PATH_SEGMENTS = 2
 
 
-@dataclass(slots=True)
-class _PublicationCandidate:
+class _PublicationCandidate(InternalModel):
     publication: dict[str, Any]
     query: str
     query_index: int
@@ -672,23 +675,22 @@ def _build_article_payload(
         article_id = article_uuid
         id_source = "uuid"
 
-    return {
-        "id": article_id,
-        "type": "schema:ScholarlyArticle",
-        "shacl": "pulse:ArticleShape",
-        "identifiers": {
-            "schema:identifier": doi,
-            "pulse:infoscienceArticleIdentifier": infoscience_id,
-            "uuid": article_uuid,
+    return map_fields(
+        "agent.article",
+        {
+            "id": article_id,
+            "identifiers_schema_identifier": doi,
+            "identifiers_pulse_infoscienceArticleIdentifier": infoscience_id,
+            "identifiers_uuid": article_uuid,
+            "idSource": id_source,
+            "name": _as_string(publication.get("title")) or "Untitled article",
+            "identifier": identifier_value,
+            "datePublished": publication_date,
+            "author": author_ids,
+            "infoscienceArticleIdentifier": infoscience_id,
+            "sourceOrganization": source_organization,
         },
-        "idSource": id_source,
-        "schema:name": _as_string(publication.get("title")) or "Untitled article",
-        "schema:identifier": identifier_value,
-        "schema:datePublished": publication_date,
-        "schema:author": author_ids,
-        "pulse:infoscienceArticleIdentifier": infoscience_id,
-        "schema:sourceOrganization": source_organization,
-    }
+    )
 
 
 class ArticleAgentV2:
@@ -733,7 +735,23 @@ class ArticleAgentV2:
             ),
         )
 
-        query_terms = _extract_root_terms(context)
+        # Source-declared paper identifiers are stronger search seeds than a
+        # repository slug. Their citation IRIs survive independently of search.
+        query_terms: list[str] = []
+        for repository in context.get("known_repositories", []):
+            if not isinstance(repository, dict):
+                continue
+            for citation in repository.get("_project_citations") or []:
+                if not isinstance(citation, dict):
+                    continue
+                iri = _as_string(citation.get("iri"))
+                if iri:
+                    query_terms.append(
+                        iri.removeprefix("https://doi.org/").removeprefix("https://arxiv.org/abs/"),
+                    )
+                if title := _as_string(citation.get("title")):
+                    query_terms.append(title)
+        query_terms.extend(_extract_root_terms(context))
         if include_person:
             query_terms.extend(
                 _extract_person_terms(_collect_known_persons(context)),
@@ -753,6 +771,7 @@ class ArticleAgentV2:
         providers: ProviderSet,
     ) -> AgentResult:
         warnings: list[str] = []
+        unavailable_providers: list[str] = []
         queries = self.build_query_blend(context)
 
         max_unresolved_authors = context.get("max_unresolved_article_authors")
@@ -764,7 +783,7 @@ class ArticleAgentV2:
                 data={},
                 warnings=["Infoscience provider not configured for article enrichment"],
                 raw_output={},
-                stats={"queries": queries, "articles": []},
+                stats={"queries": queries, "articles": [], "unavailable_providers": unavailable_providers},
             )
 
         if not queries:
@@ -781,6 +800,7 @@ class ArticleAgentV2:
                 publications = providers.infoscience.search_publications(query)
             except Exception as exc:  # noqa: BLE001
                 _append_unique(warnings, f"Infoscience publication search failed for '{query}': {exc}")
+                _append_unique(unavailable_providers, "infoscience")
                 continue
 
             raw_candidates.extend(
@@ -799,7 +819,7 @@ class ArticleAgentV2:
                 data={},
                 warnings=warnings,
                 raw_output={},
-                stats={"queries": queries, "articles": []},
+                stats={"queries": queries, "articles": [], "unavailable_providers": unavailable_providers},
             )
 
         person_lookup, authority_lookup = _build_person_lookup(
@@ -974,6 +994,7 @@ class ArticleAgentV2:
             raw_output=primary_raw_output,
             stats={
                 "queries": list(queries),
+                "unavailable_providers": unavailable_providers,
                 "raw_candidate_count": len(raw_candidates),
                 "ranked_candidate_count": len(ranked_candidates),
                 "articles": deepcopy(validated_articles),

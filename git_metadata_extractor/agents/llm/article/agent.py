@@ -9,6 +9,8 @@ from typing import Any
 
 from pydantic import ValidationError
 
+from git_metadata_extractor.agents.tool_catalog import ToolContext, resolve_tools
+
 logger = logging.getLogger(__name__)
 
 from git_metadata_extractor.agents.llm._loader import load_prompt
@@ -17,47 +19,13 @@ from git_metadata_extractor.agents.llm._verdict_cache import (
     get_cached_agent_verdict,
     store_agent_verdict,
 )
-from git_metadata_extractor.agents.llm.agent_tools.epfl_graph_rag import (
-    make_epfl_graph_rag_search_tool,
+from git_metadata_extractor.agents.llm.prompt_context import (
+    append_runtime_prompt_context,
 )
-from git_metadata_extractor.agents.llm.agent_tools.ethz_research_collection_rag import (
-    make_ethz_research_collection_rag_fetch_chunks_tool,
-    make_ethz_research_collection_rag_fetch_records_tool,
-    make_ethz_research_collection_rag_search_tool,
-)
-from git_metadata_extractor.agents.llm.agent_tools.infoscience_publications import (
-    make_infoscience_publications_search_tool,
-)
-from git_metadata_extractor.agents.llm.agent_tools.infoscience_rag import (
-    make_infoscience_rag_fetch_chunks_tool,
-    make_infoscience_rag_fetch_records_tool,
-    make_infoscience_rag_search_tool,
-)
-from git_metadata_extractor.agents.llm.agent_tools.openalex_rag import (
-    make_openalex_rag_search_tool,
-)
-from git_metadata_extractor.agents.llm.agent_tools.renkulab_rag import (
-    make_renkulab_rag_search_tool,
-)
-from git_metadata_extractor.agents.llm.agent_tools.selenium_fetch import (
-    make_fetch_link_content_tool,
-)
-from git_metadata_extractor.agents.llm.agent_tools.oamonitor_rag import (
-    make_oamonitor_rag_fetch_records_tool,
-    make_oamonitor_rag_search_tool,
-)
-from git_metadata_extractor.agents.llm.agent_tools.swissubase_rag import (
-    make_swissubase_rag_search_tool,
-)
-from git_metadata_extractor.agents.llm.agent_tools.zenodo_rag import (
-    make_zenodo_rag_fetch_records_tool,
-    make_zenodo_rag_search_tool,
-)
-from git_metadata_extractor.agents.llm.prompt_context import append_runtime_prompt_context
 from git_metadata_extractor.agents.llm.runtime import LLMRuntimeError, V2LLMRuntime
 from git_metadata_extractor.agents.models import AgentResult, ProviderSet, generate_uuid
-from git_metadata_extractor.providers.cache import ProviderCache
 from git_metadata_extractor.observation.query_log import stamp_current_agent
+from git_metadata_extractor.providers.cache import ProviderCache
 from git_metadata_extractor.schema.models.agent import AgentArticleShape
 from git_metadata_extractor.schema.models.strict import ArticleModel
 
@@ -434,49 +402,7 @@ class LLMArticleAgentV2:
         user_prompt = _USER_PROMPT_TEMPLATE.replace("{context_json}", context_json)
         user_prompt = append_runtime_prompt_context(user_prompt, context)
 
-        tools = [make_fetch_link_content_tool(self._cache)]
-        if providers.infoscience is not None:
-            tools.append(
-                make_infoscience_publications_search_tool(providers.infoscience),
-            )
-        if providers.infoscience_rag is not None:
-            tools.append(make_infoscience_rag_search_tool(providers.infoscience_rag))
-            tools.append(
-                make_infoscience_rag_fetch_chunks_tool(providers.infoscience_rag),
-            )
-            tools.append(
-                make_infoscience_rag_fetch_records_tool(providers.infoscience_rag),
-            )
-        if providers.ethz_research_collection_rag is not None:
-            tools.append(
-                make_ethz_research_collection_rag_search_tool(
-                    providers.ethz_research_collection_rag,
-                ),
-            )
-            tools.append(
-                make_ethz_research_collection_rag_fetch_chunks_tool(
-                    providers.ethz_research_collection_rag,
-                ),
-            )
-            tools.append(
-                make_ethz_research_collection_rag_fetch_records_tool(
-                    providers.ethz_research_collection_rag,
-                ),
-            )
-        if providers.openalex_rag is not None:
-            tools.append(make_openalex_rag_search_tool(providers.openalex_rag))
-        if providers.zenodo_rag is not None:
-            tools.append(make_zenodo_rag_search_tool(providers.zenodo_rag))
-            tools.append(make_zenodo_rag_fetch_records_tool(providers.zenodo_rag))
-        if providers.oamonitor_rag is not None:
-            tools.append(make_oamonitor_rag_search_tool(providers.oamonitor_rag))
-            tools.append(make_oamonitor_rag_fetch_records_tool(providers.oamonitor_rag))
-        if providers.renkulab_rag is not None:
-            tools.append(make_renkulab_rag_search_tool(providers.renkulab_rag))
-        if providers.swissubase_rag is not None:
-            tools.append(make_swissubase_rag_search_tool(providers.swissubase_rag))
-        if providers.epfl_graph_rag is not None:
-            tools.append(make_epfl_graph_rag_search_tool(providers.epfl_graph_rag))
+        tools = resolve_tools("article_agent", ToolContext(providers=providers, cache=self._cache, context=context))
 
         try:
             llm_result = await asyncio.wait_for(

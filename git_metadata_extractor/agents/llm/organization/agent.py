@@ -14,61 +14,17 @@ from git_metadata_extractor.agents.llm._verdict_cache import (
     get_cached_agent_verdict,
     store_agent_verdict,
 )
-from git_metadata_extractor.agents.llm.agent_tools.epfl_graph_rag import (
-    make_epfl_graph_rag_search_tool,
+from git_metadata_extractor.agents.llm.prompt_context import (
+    append_runtime_prompt_context,
 )
-from git_metadata_extractor.agents.llm.agent_tools.ethz_research_collection_rag import (
-    make_ethz_research_collection_rag_fetch_chunks_tool,
-    make_ethz_research_collection_rag_fetch_records_tool,
-    make_ethz_research_collection_rag_search_tool,
-)
-from git_metadata_extractor.agents.llm.agent_tools.federated_rag import (
-    make_federated_rag_lookup_tool,
-    make_federated_rag_search_tool,
-)
-from git_metadata_extractor.agents.llm.agent_tools.github_organization import (
-    make_github_organization_metadata_tool,
-)
-from git_metadata_extractor.agents.llm.agent_tools.huggingface_rag import (
-    make_huggingface_rag_search_tool,
-)
-from git_metadata_extractor.agents.llm.agent_tools.infoscience_orgunit import (
-    make_infoscience_orgunit_tool,
-)
-from git_metadata_extractor.agents.llm.agent_tools.infoscience_rag import (
-    make_infoscience_rag_fetch_chunks_tool,
-    make_infoscience_rag_fetch_records_tool,
-    make_infoscience_rag_search_tool,
-)
-from git_metadata_extractor.agents.llm.agent_tools.openalex_rag import (
-    make_openalex_rag_search_tool,
-)
-from git_metadata_extractor.agents.llm.agent_tools.organization_identity import (
-    make_organization_identity_search_tool,
-)
-from git_metadata_extractor.agents.llm.agent_tools.renkulab_rag import (
-    make_renkulab_rag_search_tool,
-)
-from git_metadata_extractor.agents.llm.agent_tools.ror_organization import (
-    make_ror_organization_search_tool,
-)
-from git_metadata_extractor.agents.llm.agent_tools.ror_rag import (
-    make_ror_rag_search_tool,
-)
-from git_metadata_extractor.agents.llm.agent_tools.selenium_fetch import (
-    make_fetch_link_content_tool,
-)
-from git_metadata_extractor.agents.llm.agent_tools.snsf_rag import (
-    make_snsf_rag_search_tool,
-)
-from git_metadata_extractor.agents.llm.prompt_context import append_runtime_prompt_context
 from git_metadata_extractor.agents.llm.runtime import (
     LLMRuntimeError,
     V2LLMRuntime,
 )
 from git_metadata_extractor.agents.models import AgentResult, ProviderSet, generate_uuid
-from git_metadata_extractor.providers.cache import ProviderCache
+from git_metadata_extractor.agents.tool_catalog import ToolContext, resolve_tools
 from git_metadata_extractor.observation.query_log import stamp_current_agent
+from git_metadata_extractor.providers.cache import ProviderCache
 from git_metadata_extractor.schema.models.agent import AgentOrganizationShape
 from git_metadata_extractor.schema.models.strict import OrganizationModel
 
@@ -244,59 +200,7 @@ class LLMOrganizationAgentV2:
         user_prompt = _USER_PROMPT_TEMPLATE.replace("{context_json}", context_json)
         user_prompt = append_runtime_prompt_context(user_prompt, context)
 
-        tools = [make_fetch_link_content_tool(self._cache)]
-        if providers.github is not None:
-            tools.append(make_github_organization_metadata_tool(providers.github))
-        if providers.ror is not None and providers.infoscience is not None:
-            tools.append(
-                make_organization_identity_search_tool(
-                    providers.ror,
-                    providers.infoscience,
-                ),
-            )
-        elif providers.ror is not None:
-            tools.append(make_ror_organization_search_tool(providers.ror))
-        elif providers.infoscience is not None:
-            tools.append(make_infoscience_orgunit_tool(providers.infoscience))
-        if providers.infoscience_rag is not None:
-            tools.append(make_infoscience_rag_search_tool(providers.infoscience_rag))
-            tools.append(
-                make_infoscience_rag_fetch_chunks_tool(providers.infoscience_rag),
-            )
-            tools.append(
-                make_infoscience_rag_fetch_records_tool(providers.infoscience_rag),
-            )
-        if providers.ethz_research_collection_rag is not None:
-            tools.append(
-                make_ethz_research_collection_rag_search_tool(
-                    providers.ethz_research_collection_rag,
-                ),
-            )
-            tools.append(
-                make_ethz_research_collection_rag_fetch_chunks_tool(
-                    providers.ethz_research_collection_rag,
-                ),
-            )
-            tools.append(
-                make_ethz_research_collection_rag_fetch_records_tool(
-                    providers.ethz_research_collection_rag,
-                ),
-            )
-        if providers.ror_rag is not None:
-            tools.append(make_ror_rag_search_tool(providers.ror_rag))
-        if providers.snsf_rag is not None:
-            tools.append(make_snsf_rag_search_tool(providers.snsf_rag))
-        if providers.huggingface_rag is not None:
-            tools.append(make_huggingface_rag_search_tool(providers.huggingface_rag))
-        if providers.openalex_rag is not None:
-            tools.append(make_openalex_rag_search_tool(providers.openalex_rag))
-        if providers.renkulab_rag is not None:
-            tools.append(make_renkulab_rag_search_tool(providers.renkulab_rag))
-        if providers.federated_rag is not None:
-            tools.append(make_federated_rag_search_tool(providers.federated_rag))
-            tools.append(make_federated_rag_lookup_tool(providers.federated_rag))
-        if providers.epfl_graph_rag is not None:
-            tools.append(make_epfl_graph_rag_search_tool(providers.epfl_graph_rag))
+        tools = resolve_tools("org_agent", ToolContext(providers=providers, cache=self._cache, context=context))
 
         identifier = org_name
         tool_names = [getattr(t, "name", None) or getattr(t, "__name__", "?") for t in tools]

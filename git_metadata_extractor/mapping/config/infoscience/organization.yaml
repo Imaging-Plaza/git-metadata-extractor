@@ -1,0 +1,13 @@
+schema_version: 1
+name: infoscience.organization
+version: '1'
+source_contract: infoscience.organization.record
+target_contract: agent.organization
+fields: {}
+internal_fields:
+  _infoscience_code: {sources: [infoscience_code], empty: preserve, missing: 'null'}
+  _unit_code: {sources: [unit_code], empty: preserve, missing: 'null'}
+  _parent_acronym: {sources: [parent_acronym], empty: preserve, missing: 'null'}
+  _director_name: {sources: [director_name], empty: preserve, missing: 'null'}
+  _org_type_dspace: {sources: [org_type_dspace], empty: preserve, missing: 'null'}
+  _infoscience_url: {sources: [infoscience_url], empty: preserve, missing: 'null'}

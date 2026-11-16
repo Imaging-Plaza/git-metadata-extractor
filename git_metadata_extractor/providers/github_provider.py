@@ -11,13 +11,18 @@ from urllib.parse import quote, urlparse
 
 import requests
 
-from git_metadata_extractor.providers.github_token_pool import (
-    github_auth_headers as _github_auth_headers,
-)
-from git_metadata_extractor.providers.cache import ProviderCache
 from git_metadata_extractor.providers.base import (
     GitHubProvider,
+    ProviderError,
     ProviderNotFoundError,
+)
+from git_metadata_extractor.providers.cache import ProviderCache
+from git_metadata_extractor.providers.contributors import (
+    ContributorCoverage,
+    ContributorLookup,
+)
+from git_metadata_extractor.providers.github_token_pool import (
+    github_auth_headers as _github_auth_headers,
 )
 
 if TYPE_CHECKING:
@@ -33,6 +38,32 @@ GITHUB_NOREPLY_PATTERN = re.compile(
     flags=re.IGNORECASE,
 )
 logger = logging.getLogger(__name__)
+
+# A fallback must never turn one extraction into an unbounded repository crawl.
+_CONTRIBUTOR_PAGE_SIZE = 100
+_CONTRIBUTOR_MAX_PAGES = 3
+_HTTP_OK = 200
+_HTTP_NO_CONTENT = 204
+_CONTRIBUTORS_TOO_LARGE = (
+    "The history or contributor list is too large to list contributors "
+    "for this repository via the API."
+)
+
+
+def _is_oversized_contributor_response(response: Any) -> bool:
+    """Only the explicit repository-size rejection permits another endpoint."""
+    headers = {str(key).lower(): str(value) for key, value in response.headers.items()}
+    if (
+        response.status_code not in {403, 422}
+        or "retry-after" in headers
+        or headers.get("x-ratelimit-remaining", "").strip() == "0"
+    ):
+        return False
+    try:
+        body = response.json()
+    except ValueError:
+        return False
+    return isinstance(body, dict) and body.get("message") == _CONTRIBUTORS_TOO_LARGE
 
 # Docker Compose filenames (basename), e.g. docker-compose.yml,
 # docker-compose.prod.yaml, compose.yml — anywhere in the tree.
@@ -1760,6 +1791,8 @@ class RealGitHubProvider(GitHubProvider):
         return date if isinstance(date, str) else None, count
 
     def get_user(self, username: str) -> dict[str, Any]:
+        from git_metadata_extractor.providers import sources_service  # noqa: PLC0415
+
         def _fetch() -> dict[str, Any]:
             try:
                 return self._run_with_rate_limit(
@@ -1768,6 +1801,20 @@ class RealGitHubProvider(GitHubProvider):
             except ValueError as exc:
                 raise ProviderNotFoundError(str(exc)) from exc
 
+        if sources_service.current_source_mode() == "snapshot":
+            # Historical GitHub cache entries can contain ORCID page content.
+            # Keep GitHub facts and the profile's ORCID link, never that enrichment.
+            payload = _fetch() if self._cache is None else self._cache.get_or_set(
+                ProviderCache.make_key(
+                    "github", "get_user", username=username,
+                    include_repositories=self._include_user_repositories,
+                    source_mode="snapshot",
+                ),
+                _fetch, label=f"github.get_user({username})",
+            )
+            if payload.get("orcid_activities") is not None:
+                sources_service.record_source_gap("snapshot: live ORCID activity content excluded from GitHub metadata")
+            return {**payload, "orcid_activities": None}
         if self._cache is None:
             return _fetch()
         key = ProviderCache.make_key(
@@ -1806,16 +1853,30 @@ class RealGitHubProvider(GitHubProvider):
         )
 
     def get_contributors(self, full_name: str) -> list[dict[str, Any]]:
+        """Legacy list interface; unavailable enumeration is not an empty success."""
+        result = self.get_contributors_with_coverage(full_name)
+        if not result.fetched:
+            message = f"Contributor coverage unavailable for {full_name}: {result.coverage.reason}"
+            raise ProviderError(message)
+        return result.contributors
+
+    def get_contributors_with_coverage(self, full_name: str) -> ContributorLookup:
+        """Prefer GIMIE identities, then enumerate at most 300 linked REST accounts.
+
+        GIMIE does not expose pagination metadata, so even a nonempty list has
+        unknown completeness. REST's completed pagination covers linked accounts
+        only; anonymous commit authors are not GitHub identities. Failures are
+        returned with diagnostics and are never cached as successful empty lists.
+        """
         repository_url = _normalize_repo_url(full_name)
+        fallback_reason = "gimie_no_contributor_identities"
+        try:
+            node = self._get_repository_node(full_name)
+        except Exception:  # noqa: BLE001 - preserve REST fallback on a GIMIE outage
+            node = {}
+            fallback_reason = "gimie_lookup_failed"
         gimie_payload = self._gimie_payload_cache.get(repository_url) or {}
-        node = self._get_repository_node(full_name)
         gimie_contributor_logins = _extract_contributor_logins_from_node(node)
-        if not gimie_contributor_logins:
-            logger.debug(
-                "GIMIE contributor extraction returned no GitHub logins for %s",
-                full_name,
-            )
-            return []
         person_index, org_logins = _classify_graph_nodes(gimie_payload)
         contributors = []
         for login in gimie_contributor_logins:
@@ -1828,9 +1889,121 @@ class RealGitHubProvider(GitHubProvider):
                     "name": _extract_name_from_person_node(person_node),
                     "email": None,
                     "contributions": None,
-                }
+                },
             )
-        return contributors
+        if contributors:
+            return ContributorLookup(
+                contributors=contributors,
+                coverage=ContributorCoverage(
+                    status="unknown", source="gimie", returned_count=len(contributors),
+                    reason="gimie_enumeration_metadata_unavailable",
+                ),
+            )
+        return self._get_rest_contributors(full_name, fallback_reason=fallback_reason)
+
+    def _get_rest_contributors(self, full_name: str, *, fallback_reason: str) -> ContributorLookup:
+        contributors: dict[str, dict[str, Any]] = {}
+        coverage = ContributorCoverage(
+            status="unavailable", source="github_rest", fallback_reason=fallback_reason,
+        )
+        for page in range(1, _CONTRIBUTOR_MAX_PAGES + 1):
+            payload, more, error = self._fetch_github_list_page(
+                full_name, resource="contributors", page=page,
+            )
+            if error:
+                if error == "github_contributors_too_large" and not contributors:
+                    return self._get_recent_commit_authors(full_name)
+                coverage.reason = error
+                break
+            coverage.pages_fetched += 1
+            invalid = False
+            for row in payload:
+                login = _normalize_github_login(row.get("login")) if isinstance(row, dict) else None
+                if not login or row.get("type") == "Organization":
+                    invalid = True
+                    continue
+                count = row.get("contributions")
+                contributors.setdefault(login.lower(), {
+                    "login": login, "name": None, "email": None,
+                    "contributions": count if type(count) is int and count >= 0 else None,
+                })
+            if invalid:
+                coverage.reason = "github_unusable_contributor_records"
+            if not more:
+                if coverage.reason is None:
+                    coverage.status = "complete" if contributors else "empty"
+                break
+        else:
+            coverage.reason = "page_limit"
+        coverage.returned_count = len(contributors)
+        if coverage.reason:
+            coverage.status = "partial" if contributors else "unavailable"
+        return ContributorLookup(contributors=list(contributors.values()), coverage=coverage)
+
+    def _get_recent_commit_authors(self, full_name: str) -> ContributorLookup:
+        """One recent commit page provides identities, never lifetime counts."""
+        payload, _more, error = self._fetch_github_list_page(
+            full_name, resource="commits", page=1,
+        )
+        contributors: dict[str, dict[str, Any]] = {}
+        for row in payload:
+            author = row.get("author") if isinstance(row, dict) else None
+            if not isinstance(author, dict) or author.get("type") != "User":
+                continue
+            login = author.get("login")
+            if not isinstance(login, str) or not GITHUB_LOGIN_PATTERN.fullmatch(login):
+                continue
+            contributors.setdefault(login.lower(), {
+                "login": login, "name": None, "email": None, "contributions": None,
+            })
+        return ContributorLookup(
+            contributors=list(contributors.values()),
+            coverage=ContributorCoverage(
+                status="partial" if contributors else "unavailable",
+                source="github_rest_commits", scope="recent_commit_authors",
+                reason=error or ("recent_commit_sample" if contributors else "github_no_linked_commit_authors"),
+                fallback_reason="github_contributors_too_large",
+                pages_fetched=0 if error else 1,
+                returned_count=len(contributors),
+            ),
+        )
+
+    def _fetch_github_list_page(
+        self, full_name: str, *, resource: str, page: int,
+    ) -> tuple[list[Any], bool, str | None]:
+        """Follow only the pagination signal, never a server-provided URL."""
+        def request():
+            return requests.get(
+                f"https://api.github.com/repos/{full_name}/{resource}",
+                params={"per_page": _CONTRIBUTOR_PAGE_SIZE, "page": page},
+                headers=_github_auth_headers(), timeout=15,
+            )
+
+        try:
+            # The commit sample is strictly one request, including on HTTP 429.
+            # Its prerequisite already rejects quota/Retry-After responses.
+            response = request() if resource == "commits" else self._run_with_rate_limit(request)
+        except Exception:  # noqa: BLE001 - sanitized outcome, no credentials/body in warnings
+            return [], False, "github_request_failed"
+        if response.status_code == _HTTP_NO_CONTENT:  # Empty repository; no JSON body.
+            return [], False, None
+        if response.status_code != _HTTP_OK:
+            reason = (
+                "github_contributors_too_large"
+                if resource == "contributors" and _is_oversized_contributor_response(response)
+                else f"github_http_{response.status_code}"
+            )
+            return [], False, reason
+        try:
+            payload = response.json()
+        except ValueError:
+            return [], False, "github_invalid_response"
+        if not isinstance(payload, list) or len(payload) > _CONTRIBUTOR_PAGE_SIZE:
+            return [], False, "github_invalid_response"
+        more = any(
+            'rel="next"' in segment for segment in response.headers.get("Link", "").split(",")
+        )
+        return payload, more, None
 
     def get_languages(self, full_name: str) -> dict[str, int]:
         node = self._get_repository_node(full_name)

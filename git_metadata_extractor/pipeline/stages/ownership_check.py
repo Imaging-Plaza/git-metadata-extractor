@@ -30,7 +30,15 @@ from typing import Any
 from urllib.parse import urlparse
 from uuid import uuid4
 
-from git_metadata_extractor.canonicalization.github import parse_github_org_iri
+from git_metadata_extractor.canonicalization.github import (
+    github_org_iri,
+    github_user_iri,
+    parse_github_org_iri,
+)
+from git_metadata_extractor.canonicalization.organization_evidence import (
+    organization_name_matches,
+    organization_website_matches,
+)
 from git_metadata_extractor.pipeline.stages.models import AssembledOutput, ReconciledEntities
 
 OWNS_KEY = "pulse:owns"
@@ -267,15 +275,43 @@ OWNED_BY_KEY = "pulse:ownedBy"
 REPO_HANDLE_KEY = "pulse:githubRepositoryHandle"
 
 
+#: An `<owner>/<repo>` handle needs both segments; one segment is an
+#: owner-only reference and not a repository handle at all.
+_MIN_REPO_HANDLE_SEGMENTS = 2
+
+
 def _extract_owner_from_repo_handle(handle: Any) -> str | None:
-    """Return the `<owner>` segment of `<owner>/<repo>`, else `None`."""
+    """Return the `<owner>` segment of a repository handle, else `None`.
+
+    Accepts both forms that actually occur in the graph. The 120-URL baseline
+    corpus carries `pulse:githubRepositoryHandle` as a full URL on 90 of 95
+    repositories and as bare `<owner>/<repo>` on the other 5:
+
+        https://github.com/LIONS-EPFL/ELLE   ->  LIONS-EPFL
+        HippolyteKarakostas/galaxy2galaxy    ->  HippolyteKarakostas
+
+    Only the bare form used to be handled, so a URL returned the scheme
+    fragment `'https:'` — `"https://…".split("/", 1)[0]`. That value became a
+    synthesized Person's `pulse:githubUsername`, failed its pattern, got the
+    Person excluded by strict validation, orphaned the repository's
+    `schema:author`, and left the array empty for SHACL to reject. One defect,
+    46 occurrences, seven warning kinds. See
+    `tests/v2/corpus/BASELINE_FINDINGS.md`.
+
+    Parsing the path rather than stripping known prefixes keeps this correct
+    for any host, which matters because GitLab handles are coming.
+    """
     if not isinstance(handle, str):
         return None
     candidate = handle.strip()
-    if "/" not in candidate:
+    if not candidate:
         return None
-    owner = candidate.split("/", maxsplit=1)[0].strip()
-    return owner or None
+    # urlparse puts a bare `owner/repo` entirely in `.path`, so one code path
+    # serves both forms. Empty segments absorb doubled slashes.
+    segments = [segment for segment in urlparse(candidate).path.split("/") if segment]
+    if len(segments) < _MIN_REPO_HANDLE_SEGMENTS:
+        return None
+    return segments[0].strip() or None
 
 
 def _owner_handle_for_repo_original_case(entity: dict[str, Any]) -> str | None:
@@ -499,18 +535,28 @@ def infer_owners(
         if not handle:
             continue
         stub_uuid = str(uuid4())
+        # `pulse:githubUsername` is the canonical profile URL, not the bare
+        # handle: both the agent and strict schemas pattern-match it against
+        # `^https://github\.com/...`, and so does the SHACL shape. Writing the
+        # bare handle here produced 5 invalid Person stubs in a 120-repo corpus
+        # — invisible for as long as the test suite validated against a stale
+        # copy of these schemas that carried no `pattern`. `schema:name` keeps
+        # the bare handle: that one is a display string.
+        # Built from `handle` rather than reused from `target_id`, because
+        # `target_id` may carry extra path segments that `handle` has stripped.
+        profile_url = github_user_iri(handle) or target_id
         new_stubs.append(
             {
                 "id": target_id,
                 "type": "schema:Person",
                 "shacl": "pulse:PersonShape",
                 "identifiers": {
-                    "pulse:githubUsername": handle,
+                    "pulse:githubUsername": profile_url,
                     "uuid": stub_uuid,
                 },
                 "idSource": "pulse:githubUsername",
                 "schema:name": handle,
-                "pulse:githubUsername": handle,
+                "pulse:githubUsername": profile_url,
                 # Reference-only placeholder for an inferred owner, not an
                 # independently-extracted Person (Bug 07: complete `_stub`).
                 "_stub": True,
@@ -852,101 +898,22 @@ def _ror_record_score(
     return len(gh_tokens & ror_tokens)
 
 
-# Minimum length for a ROR-name token to count as a substring match against a
-# de-separated handle. Guards against generic 2-3 char fragments ("ai", "bio")
-# matching coincidentally (e.g. "ai" inside "unionai").
-_MIN_SUBSTRING_TOKEN_LEN = 4
-
-
 def _despace(value: str) -> str:
     """Lowercase and strip all non-alphanumerics — turns 'Broad Institute' and
     'broad-institute' both into 'broadinstitute' for substring comparison."""
     return re.sub(r"[^a-z0-9]+", "", value.lower())
 
 
-# Generic organisation words that collide across unrelated orgs and so must
-# NOT count as a name-match nexus on their own. ROR's relevance ranking puts a
-# token-coincident org at #1 for these (`Edinburgh Genome Foundry` -> "Jøtul",
-# whose alias is "Kværner Foundry"; `... Genomics` -> any genomics company),
-# and the github→ROR resolver accepts ROR's #1 without a similarity check. The
-# nexus must be a *distinctive* shared token, not one of these.
-_GENERIC_ORG_TOKENS = frozenset(
-    """
-    foundry research lab labs laboratory laboratories group institute institut
-    institutes university college center centre data hub science sciences scientific
-    bio biotech biosciences genomics genome genomic cloud platform tech technology
-    technologies systems system solutions computational national international
-    corporation corp company foundation association network project team engineering
-    medical medicine health information intelligence machine learning open source
-    global services consulting consultants digital software therapeutics pharma
-    pharmaceuticals biology biological dynamics analytics consortium initiative
-    of the and for de la el du des inc ltd gmbh llc co
-    """.split(),
-)
-
-
-def _distinctive(tokens: set[str]) -> set[str]:
-    """Tokens that distinguish one org from another — drops generic org words
-    and 1-2 char fragments that match coincidentally."""
-    return {t for t in tokens if len(t) >= 3 and t not in _GENERIC_ORG_TOKENS}
-
-
 def _ror_match_has_nexus(
     *, handle: str, name: str | None, ror_record: dict[str, Any],
 ) -> bool:
-    """True when the github org and the ROR record share a *distinctive* signal.
-
-    ROR's free-text ranking happily returns a coincidental top hit whose only
-    overlap with the org is a generic word (`Edinburgh Genome Foundry` -> Jøtul
-    via the alias "Kværner Foundry"; `unionai` -> "Ai Corporation" via "ai"),
-    and the resolver accepts ROR's #1 without verifying the name. This guard is
-    that verification: keep a match only when there is
-
-      1. a shared *distinctive* (non-generic, >=3 char) name token, OR
-      2. an acronym match (acronyms are inherently distinctive), OR
-      3. a distinctive ROR-name token (>=4 chars) appearing as a substring of
-         the de-separated handle/name — recovering concatenated handles
-         (`broadinstitute` -> "Broad Institute", `huggingface` -> "Hugging Face").
-
-    Generic-word-only overlaps (the Jøtul / Ai Corporation failure mode) share
-    no distinctive token and are rejected. Validated against the reported
-    suspect pairs using the live ROR records (incl. Jøtul's aliases).
-    """
-    gh_tokens = _handle_aliases(handle)
-    if isinstance(name, str):
-        gh_tokens |= _name_aliases(name)
-    gh_distinctive = _distinctive(gh_tokens)
-
-    ror_tokens: set[str] = set(_name_aliases(ror_record.get("name")))
-    for alias in ror_record.get("aliases") or []:
-        ror_tokens |= _name_aliases(alias)
-    ror_distinctive = _distinctive(ror_tokens)
-
-    # 1) shared distinctive token
-    if gh_distinctive & ror_distinctive:
-        return True
-    # 2) acronym match
-    acronyms = {a.lower() for a in (ror_record.get("acronyms") or []) if isinstance(a, str)}
-    if gh_tokens & acronyms:
-        return True
-    # 3) distinctive ROR token as a substring of the de-separated handle/name
-    blobs = [_despace(handle)]
-    if isinstance(name, str) and name.strip():
-        blobs.append(_despace(name))
-    return any(
-        len(tok) >= _MIN_SUBSTRING_TOKEN_LEN and any(tok in blob for blob in blobs)
-        for tok in ror_distinctive
-    )
+    """Require a complete distinctive name, alias, or explicit acronym."""
+    return organization_name_matches(ror_record, handle, name)
 
 
-# --- web-domain evidence (Tier A1) -----------------------------------------
-# A web-domain match is the highest-precision, zero-cost owner→ROR signal and
-# resolves the residual token-coincidence cases name comparison can't
-# (cloud.google.com vs deepmind.google; opig.stats.ox.ac.uk vs
-# oxfordresearchgroup.org.uk). Comparison is on the *registrable label* (the
-# name immediately left of the public suffix), so single labels colliding
-# ("google" in both cloud.google.com and deepmind.google) don't false-match —
-# google.com vs deepmind.google differ.
+# Domain labels support metadata hints and diagnostic messages. Acceptance in
+# _select_ror_parent uses organization_website_matches, which compares full
+# hosts (including suffixes) and permits institutional subdomains.
 
 # Common two-label public suffixes, so the registrable label is the org name
 # (opig.stats.ox.ac.uk -> "ox") and not the suffix ("ac").
@@ -1409,6 +1376,7 @@ async def _select_ror_parent(
         return None
 
     org_label = _org_domain_label(org_context)
+    homepage = (org_context or {}).get("homepage")
     org_ext = set((org_context or {}).get("external_ids") or [])
     org_name_keys = _name_keys(org_name, handle)
 
@@ -1419,7 +1387,8 @@ async def _select_ror_parent(
     #   A3 exact name / acronym (normalised equality)
     if org_label:
         domain_matches = [
-            hit for _score, hit in shortlist if org_label in _ror_domain_labels(hit)
+            hit for _score, hit in shortlist
+            if organization_website_matches(homepage, hit) is True
         ]
         chosen = _disambiguate_domain_matches(domain_matches)
         if chosen is not None:
@@ -1437,7 +1406,10 @@ async def _select_ror_parent(
                 return _stamp_match(hit, "A2_external_id", 0.99, handle, warnings)
     if org_name_keys:
         for _score, hit in shortlist:
-            if org_name_keys & (_ror_name_keys(hit) | _ror_acronyms(hit)):
+            if (
+                org_name_keys & (_ror_name_keys(hit) | _ror_acronyms(hit))
+                and organization_website_matches(homepage, hit) is not False
+            ):
                 return _stamp_match(hit, "A3_exact_name", 0.95, handle, warnings)
 
     # --- candidate selection: rule-based unambiguous winner, or the LLM picker ---
@@ -1491,18 +1463,12 @@ async def _select_ror_parent(
         )
         return None
 
-    # Decisive negative: both sides have a web domain and they differ -> they are
-    # different orgs (cloud.google.com vs deepmind.google; ox.ac.uk vs
-    # oxfordresearchgroup.org.uk). Only fires when the org has a usable domain.
-    if org_label:
-        ror_labels = _ror_domain_labels(chosen_hit)
-        if ror_labels and org_label not in ror_labels:
-            warnings.append(
-                f"github_handle_parents: rejected ROR '{chosen_ror_id}' for handle "
-                f"'{handle}' — web-domain mismatch (org '{org_label}' vs ROR "
-                f"{sorted(ror_labels)}).",
-            )
-            return None
+    if organization_website_matches(homepage, chosen_hit) is False:
+        warnings.append(
+            f"github_handle_parents: rejected ROR '{chosen_ror_id}' for handle "
+            f"'{handle}': web-domain mismatch.",
+        )
+        return None
 
     chosen_hit["_ror_match_tier"] = match_tier
     chosen_hit["_ror_match_confidence"] = match_conf
@@ -1704,9 +1670,18 @@ def _synthesize_owner_person_stub(handle: str) -> dict[str, Any]:
 
     Used by `guarantee_repo_author` when the repository's owner handle has no
     Person or Organization entity in the reconciled graph (typical of solo
-    repos with no extracted contributors). The stub satisfies the strict
+    repos with no extracted contributors). The stub must satisfy the strict
     Person schema so it survives validation and can be referenced as
     `schema:author` on the root repository.
+
+    `pulse:githubUsername` carries the **canonical profile URL**, not the bare
+    handle. The strict Person schema's `anyOf` requires
+    `^https://github\\.com/[A-Za-z0-9][A-Za-z0-9-]{0,38}$`, so a bare handle
+    fails every branch, the stub is excluded by strict validation, the
+    repository's `schema:author` is left empty, and SHACL then reports
+    `sh:minCount 1` unsatisfied. That was 46 of the 60 SHACL violations in the
+    baseline corpus — the salvage ran and produced an entity its own schema
+    rejected. See `tests/v2/corpus/BASELINE_FINDINGS.md`.
     """
     profile_url = f"https://github.com/{handle}"
     return {
@@ -1716,7 +1691,7 @@ def _synthesize_owner_person_stub(handle: str) -> dict[str, Any]:
         "identifiers": {
             "pulse:orcid": None,
             "pulse:infosciencePersonIdentifier": None,
-            "pulse:githubUsername": handle,
+            "pulse:githubUsername": profile_url,
             "uuid": str(uuid4()),
         },
         "idSource": "pulse:githubUsername",
@@ -1728,7 +1703,8 @@ def _synthesize_owner_person_stub(handle: str) -> dict[str, Any]:
         # observed in `gabyx/pandoc` even after the agent-side fixes,
         # because the stubs are added downstream of those agents).
         "schema:url": None,
-        "pulse:githubUsername": handle,
+        # URL form, for the same schema reason as `identifiers` above.
+        "pulse:githubUsername": profile_url,
         "pulse:orcidIdentifier": None,
         "pulse:infosciencePersonIdentifier": None,
         "org:hasMembership": [],
@@ -2018,6 +1994,21 @@ def demote_github_props_to_units(  # noqa: C901
             continue
         raw_handle = raw_handle.strip()
 
+        # `pulse:githubOrganizationHandle` may arrive in either form, so derive
+        # both explicitly rather than assuming. The strict Organization schema
+        # requires the URL form (`^https://github\.com/...`) for the handle
+        # property, while `schema:name` wants the bare handle — a display name
+        # should never be a URL.
+        #
+        # Concatenating `https://github.com/` onto the raw value produced
+        # `https://github.com/https://github.com/<handle>` whenever the field
+        # already held a URL, which it usually does. `github_org_iri` is
+        # idempotent and case-preserving, so it is safe for both forms.
+        unit_iri = github_org_iri(raw_handle)
+        if unit_iri is None:
+            continue
+        bare_handle = parse_github_org_iri(raw_handle) or raw_handle
+
         matched_child: dict[str, Any] | None = None
         units = parent.get(HAS_UNIT_KEY)
         if isinstance(units, list):
@@ -2035,7 +2026,7 @@ def demote_github_props_to_units(  # noqa: C901
 
         # Case 2: synthesize the unit if no matching child exists.
         if matched_child is None:
-            synthesized_id = f"https://github.com/{raw_handle}"
+            synthesized_id = unit_iri
             if synthesized_id in id_index:
                 # Same URL exists as a non-unit org (e.g. it wasn't in
                 # parent's hasUnit list yet). Reuse instead of duplicating.
@@ -2046,12 +2037,12 @@ def demote_github_props_to_units(  # noqa: C901
                     "type": ORGANIZATION_TYPE,
                     "shacl": "pulse:OrganizationShape",
                     "identifiers": {
-                        "pulse:githubOrganizationHandle": raw_handle,
+                        "pulse:githubOrganizationHandle": unit_iri,
                         "uuid": str(uuid4()),
                     },
                     "idSource": "pulse:githubOrganizationHandle",
-                    "schema:name": raw_handle,
-                    "pulse:githubOrganizationHandle": raw_handle,
+                    "schema:name": bare_handle,
+                    "pulse:githubOrganizationHandle": unit_iri,
                     "org:unitOf": [parent_id],
                     "_stub": True,
                 }
@@ -2059,7 +2050,7 @@ def demote_github_props_to_units(  # noqa: C901
                 id_index[synthesized_id] = matched_child
                 warnings.append(
                     f"Synthesized github-only org unit {synthesized_id} for "
-                    f"ROR parent {parent_id} (handle {raw_handle!r}). Issue #29/#33 "
+                    f"ROR parent {parent_id} (handle {bare_handle!r}). Issue #29/#33 "
                     f"extension: ROR carried the unit handle with no existing "
                     f"`org:hasUnit` link.",
                 )
@@ -2163,12 +2154,19 @@ def emit_fork_parent_stubs(
                     "type": "schema:Person",
                     "shacl": "pulse:PersonShape",
                     "identifiers": {
-                        "pulse:githubUsername": owner,
+                        # Canonical profile URL, not the bare handle: the
+                        # PersonShape patterns this against
+                        # `^https://github\.com/...`, and `owner_url` is
+                        # already exactly that. The bare form here produced a
+                        # SHACL violation on every fork whose parent owner was
+                        # not otherwise in the graph — 5 of 120 corpus runs.
+                        "pulse:githubUsername": owner_url,
                         "uuid": str(uuid4()),
                     },
                     "idSource": "pulse:githubUsername",
+                    # Display string: the bare handle is correct here.
                     "schema:name": owner,
-                    "pulse:githubUsername": owner,
+                    "pulse:githubUsername": owner_url,
                     "_stub": True,
                 },
             )

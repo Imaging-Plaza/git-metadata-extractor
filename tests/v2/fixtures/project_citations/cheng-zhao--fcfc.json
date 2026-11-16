@@ -1,0 +1,5 @@
+{
+  "full_name": "cheng-zhao/FCFC",
+  "readme_content": "FCFC is written by Cheng Zhao (&#36213;&#25104;), and is distributed under the [MIT license](LICENSE.txt). If you use this program in research work that results in publications, please cite the following paper:\n\n> Zhao, C., 2023, [&ldquo;Fast correlation function calculator: A high-performance pair-counting toolkit&rdquo;](https://doi.org/10.1051/0004-6361/202346015), *Astronomy and Astrophysics*, 672, A83. \\[[arXiv:2301.12557](https://arxiv.org/abs/2301.12557)\\] \\[[ADS Abstract](https://ui.adsabs.harvard.edu/abs/2023A%26A...672A..83Z)\\]\n\nThis program benefits from the following open-source projects:\n-   [Fast Cubic Spline Interpolation](https://doi.org/10.5281/zenodo.3611922) (see also [arXiv:2001.09253](https://arxiv.org/abs/2001.09253))\n-   [https://github.com/andralex/MedianOfNinthers](https://github.com/andralex/MedianOfNinthers) (see also [this paper](http://dx.doi.org/10.4230/LIPIcs.SEA.2017.24))\n-   [https://github.com/swenson/sort](https://github.com/swenson/sort)",
+  "aux_files": {}
+}

@@ -1,45 +1,12 @@
-"""Deterministic discipline tagger backed by the EPFL Graph RAG.
+"""Deterministic discipline selection from remote EPFL Graph source facts.
 
-Why this exists
----------------
-The rule_based pipeline previously left `pulse:discipline` empty
-because there was no path from the available signals (README text +
-repo description) to the SHACL `pulse:DisciplineEnumeration` IRIs the
-ontology wants. The LLM repo agent does this, but the rule_based path
-had to settle for `[]`.
-
-What this stage does
---------------------
-1. Builds a single text query from `schema:name + schema:description +
-   README excerpt` (cap at ~4k chars to keep one embedding call fast).
-2. Calls :class:`EpflGraphRagProvider.search` (Qdrant top-k over the
-   pre-embedded EPFL Graph disciplines collection — already populated
-   in the deployed DuckDB / Qdrant pair).
-3. Looks each hit's `category_id` up in the local DuckDB to get its
-   `wikidata_qid` (2222/2224 categories are pre-mapped — verified
-   2026-05-20). For hits whose own `qid` is not in
-   :class:`DisciplineV2`, walks up `parent_id` until either we hit an
-   allowed ancestor or run out of ancestors.
-4. Applies a score threshold (`V2_DISCIPLINE_TAGGER_MIN_SCORE`, default
-   0.4) and a per-repo cap (`V2_DISCIPLINE_TAGGER_MAX`, default 3).
-5. Stamps the deduped Wikidata Q-ids as `pulse:discipline = ["wd:Q...",
-   ...]` on the root repository entity.
-
-Why it's deterministic and safe
--------------------------------
-- Same query → same Qdrant hits → same DuckDB lookups → same result.
-  No LLM inference, no randomness.
-- Every emitted discipline IRI is gated against `DisciplineV2`, so the
-  output is always SHACL-valid by construction.
-- A score floor + a small max prevent the catch-all noise pattern that
-  killed the previous default ("everything is computer engineering").
-- A per-emission warning records the matched category, score, and
-  ancestor walk so the audit trail can be inspected later.
+The sources service owns semantic search and category ancestry. This stage
+keeps ontology policy: allowed DisciplineV2 values, score floor, granular-first
+ancestor order, deduplication and an explicit cap. No local index is opened.
 """
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import os
 from copy import deepcopy
@@ -47,6 +14,10 @@ from typing import Any
 
 from git_metadata_extractor.api_models.enums import DisciplineV2
 from git_metadata_extractor.pipeline.stages.models import AssembledOutput
+from git_metadata_extractor.providers.sources_service import (
+    SourcesClient,
+    current_sources_client,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -182,52 +153,27 @@ def _walk_collect_allowed_ancestors(
     return matches, trail
 
 
-def _fetch_category_chain_qids(
-    category_ids: list[str],
-    db_path: str,
+async def _fetch_category_chain_qids(
+    category_ids: list[str], client: SourcesClient,
 ) -> dict[str, tuple[str | None, str | None]]:
-    """Return mapping: every category_id reachable via parent chain ->
-    (wikidata_qid, parent_id). Iteratively expands the frontier so a
-    single DuckDB connection covers the full ancestor walk.
-    """
+    """Fetch source taxonomy facts; ontology selection remains in this stage."""
     if not category_ids:
         return {}
-    from pathlib import Path  # noqa: PLC0415
-
-    from open_pulse_sources.index.epfl_graph.storage.duckdb_store import (
-        EpflGraphStore,  # noqa: PLC0415
+    result = await client.operation(
+        "category-ancestors", {"category_ids": category_ids, "max_depth": 8},
     )
-
-    seen: dict[str, tuple[str | None, str | None]] = {}
-    frontier: set[str] = set(category_ids)
-    # Read-only through the store so the connection config (read_only=True,
-    # identical `config` dict) matches every other epfl_graph opener. Many
-    # read-only connections to one file coexist; a stray read-write handle
-    # would trip "different configuration than existing connections" (Bug 01).
-    try:
-        store = EpflGraphStore.open_readonly(Path(db_path))
-        con = store.connect()
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("rule_based_disciplines: duckdb open failed — %s", exc)
-        return {}
-    try:
-        for _ in range(8):  # depth-cap matches _walk_to_allowed_ancestor
-            unseen = sorted(frontier - seen.keys())
-            if not unseen:
-                break
-            rows = con.execute(
-                "SELECT category_id, wikidata_qid, parent_id FROM categories WHERE category_id IN ?",
-                (unseen,),
-            ).fetchall()
-            new_parents: set[str] = set()
-            for category_id, qid, parent in rows:
-                seen[category_id] = (qid, parent)
-                if isinstance(parent, str) and parent and parent not in seen:
-                    new_parents.add(parent)
-            frontier = new_parents
-    finally:
-        store.close()
-    return seen
+    if result.status != "ok":
+        message = f"sources taxonomy lookup {result.status}"
+        raise RuntimeError(message)
+    rows = result.data.get("categories")
+    if not isinstance(rows, list):
+        message = "sources taxonomy response has no categories"
+        raise TypeError(message)
+    return {
+        row["category_id"]: (row.get("wikidata_qid"), row.get("parent_id"))
+        for row in rows
+        if isinstance(row, dict) and isinstance(row.get("category_id"), str)
+    }
 
 
 async def tag_disciplines(
@@ -252,7 +198,6 @@ async def tag_disciplines(
         return assembled, warnings
 
     try:
-        from open_pulse_sources.index.epfl_graph.config import load_config  # noqa: PLC0415
         from git_metadata_extractor.providers.epfl_graph_rag import (  # noqa: PLC0415
             build_default_provider,
         )
@@ -260,7 +205,11 @@ async def tag_disciplines(
         warnings.append(f"rule_based_disciplines: backend unavailable — {exc}")
         return assembled, warnings
 
-    provider = build_default_provider()
+    client = current_sources_client()
+    if client is None:
+        warnings.append("rule_based_disciplines: sources service unavailable")
+        return assembled, warnings
+    provider = build_default_provider(client=client)
     if provider is None:
         # V2_EPFL_GRAPH_RAG_ENABLED is false or config missing; nothing to do.
         return assembled, warnings
@@ -278,30 +227,23 @@ async def tag_disciplines(
     min_score = _resolve_float_env("V2_DISCIPLINE_TAGGER_MIN_SCORE", DEFAULT_MIN_SCORE)
 
     try:
-        hits = await provider.search(query, top_k=top_k, rerank=True)
+        hits = await provider.search(query[:4000], top_k=min(top_k, 200), rerank=True)
     except Exception as exc:  # noqa: BLE001
-        warnings.append(f"rule_based_disciplines: qdrant search failed — {exc}")
+        warnings.append(f"rule_based_disciplines: sources search failed — {exc}")
         return assembled, warnings
 
     if not hits:
-        return assembled, warnings
-
-    try:
-        cfg = load_config()
-        db_path = str(cfg.paths.duckdb_path)
-    except Exception as exc:  # noqa: BLE001
-        warnings.append(f"rule_based_disciplines: duckdb config unavailable — {exc}")
         return assembled, warnings
 
     hit_category_ids = [
         h.get("category_id") for h in hits
         if isinstance(h.get("category_id"), str)
     ]
-    qid_by_category = await asyncio.to_thread(
-        _fetch_category_chain_qids,
-        hit_category_ids,
-        db_path,
-    )
+    try:
+        qid_by_category = await _fetch_category_chain_qids(hit_category_ids, client)
+    except Exception as exc:  # noqa: BLE001 - optional enrichment fails open
+        warnings.append(f"rule_based_disciplines: source taxonomy unavailable: {exc}")
+        return assembled, warnings
     if not qid_by_category:
         return assembled, warnings
 

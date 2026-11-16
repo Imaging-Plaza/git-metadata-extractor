@@ -1,0 +1,32 @@
+schema_version: 1
+name: github.repository
+version: '1'
+source_contract: github.rest.repository
+target_contract: agent.repository
+fields:
+  pulse:githubRepoStars: {sources: [stargazers_count], missing: 'null'}
+  pulse:githubRepoForks: {sources: [forks_count], missing: 'null'}
+internal_fields:
+  _description: {sources: [description], missing: 'null'}
+  _keywords: {sources: [topics], missing: 'null', transform: strings}
+  _homepage: {sources: [homepage], missing: 'null'}
+  _default_branch: {sources: [default_branch], missing: 'null'}
+  _primary_language: {sources: [language], missing: 'null'}
+  _size_kb: {sources: [size], missing: 'null'}
+  _archived: {sources: [archived], missing: 'null'}
+  _disabled: {sources: [disabled], missing: 'null'}
+  _pushed_at: {sources: [pushed_at], missing: 'null'}
+  _updated_at: {sources: [updated_at], missing: 'null'}
+  _open_issues_count: {sources: [open_issues_count], missing: 'null'}
+  _watchers_count: {sources: [watchers_count], missing: 'null'}
+  _subscribers_count: {sources: [subscribers_count], missing: 'null'}
+  _network_count: {sources: [network_count], missing: 'null'}
+  _has_wiki: {sources: [has_wiki], missing: 'null'}
+  _has_pages: {sources: [has_pages], missing: 'null'}
+  _has_discussions: {sources: [has_discussions], missing: 'null'}
+  _has_issues: {sources: [has_issues], missing: 'null'}
+  _has_projects: {sources: [has_projects], missing: 'null'}
+  _license_name: {sources: [license.name], missing: 'null'}
+  _license_url: {sources: [license.url], missing: 'null'}
+  _avatar_url: {sources: [owner.avatar_url], missing: 'null'}
+  _visibility: {sources: [visibility], missing: 'null'}

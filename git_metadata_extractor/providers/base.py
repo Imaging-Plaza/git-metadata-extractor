@@ -15,6 +15,11 @@ from typing import (
     TypeVar,
 )
 
+from git_metadata_extractor.providers.contributors import (
+    ContributorCoverage,
+    ContributorLookup,
+)
+
 if TYPE_CHECKING:
     from git_metadata_extractor.providers.rate_limiter import RateLimiter
 
@@ -108,6 +113,16 @@ class GitHubProvider(BaseProvider, ABC):
     @abstractmethod
     def get_contributors(self, full_name: str) -> list[dict[str, Any]]:
         """Return repository contributors for ``owner/repo``."""
+
+    def get_contributors_with_coverage(self, full_name: str) -> ContributorLookup:
+        """Compatibility adapter for providers without enumeration diagnostics."""
+        contributors = self.get_contributors(full_name)
+        return ContributorLookup(
+            contributors=contributors,
+            coverage=ContributorCoverage(
+                status="unknown", source="provider", returned_count=len(contributors),
+            ),
+        )
 
     @abstractmethod
     def get_languages(self, full_name: str) -> dict[str, int]:

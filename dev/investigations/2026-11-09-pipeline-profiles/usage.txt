@@ -1,0 +1,132 @@
+Local pipeline and agent experiments
+====================================
+
+Tool selection/registration is documented in the sibling
+../2026-11-09-tool-catalog/usage.txt; see config/pipelines/llm_tools.yaml.
+
+The experiments package is an opt-in local adapter around the production
+extractor. Existing HTTP requests keep their existing behavior. Profiles select
+collectors, generator implementations, models, concurrency and stage subsets;
+post-agent reconciliation, validation and output still use the production code.
+
+Quick start (installed development environment, repository root):
+
+  python -m git_metadata_extractor.experiments list
+  python -m git_metadata_extractor.experiments validate config/pipelines/llm.yaml
+  python -m git_metadata_extractor.experiments benchmark --profile config/pipelines/rule_based.yaml --profile config/pipelines/metadata_readme.yaml --corpus config/benchmarks/mock.json --output .cache/benchmarks/first --repeats 2
+
+Use a NEW output directory each time. The command defaults to mock providers.
+Rule-based profiles run without an LLM. Mock mode replaces the primary provider
+bundle; existing post-processing may still attempt auxiliary index services.
+Use Docker --network none for a strictly disconnected smoke test; unavailable
+auxiliary lookups are retained as warnings/failures in the extraction evidence.
+Mock providers do NOT mock the model:
+hybrid and llm profiles still require credentials and perform real model calls.
+For live GitHub inputs use --providers live, GME_GITHUB_TOKEN and
+V2_USE_MOCK_PROVIDERS=false. Supply credentials through the environment, never
+profile YAML. The command does not load .env itself; just recipes do.
+
+Examples cover two collector strategies and rule_based, hybrid and llm runtimes.
+github.context supports all existing GitHub input kinds. The smaller
+github.repository_metadata and github.readme collectors support repositories.
+Collectors run in listed order. Dictionaries merge recursively; later scalar
+and list values replace earlier ones. Each collector receives a copy of the
+accumulated context and returns a ContextBundle of additions and warnings.
+
+Compare models or agent variants
+-------------------------------
+Copy llm.yaml, assign a unique name, then add a default model selection:
+
+  model:
+    model: YOUR_ENDPOINT_MODEL_ID
+    provider: openai-compatible
+    base_url: https://your-endpoint.example/v1
+    api_key_env: YOUR_LLM_KEY
+  agents:
+    article_agent:
+      component: llm.article
+      model:
+        model: YOUR_ARTICLE_MODEL_ID
+
+Set V2_ALLOW_REQUEST_MODEL_OVERRIDE=true. Per-agent selections inherit the
+profile's provider/endpoint/key-variable settings. Global selections also apply
+to model-backed post-processing and hybrid refiners. In hybrid mode generator
+bindings must remain rule_based; only the refiners call the LLM. Give every
+parallelism variant its own profile name and max_concurrent_agents value.
+Profiles reject unknown fields/components, invalid options and runtime mixes.
+
+Optional stages select ordered subsets of existing plans, for example:
+
+  stages:
+    repository: [context_gather, repo_agent]
+
+Context and the root agent are mandatory. This does not bypass the post-agent
+validation/output chain. Adding entirely new post-processing stages is outside
+this first extension API.
+
+Register a collector or generator in Python
+-------------------------------------------
+Use a custom catalog with run_profile or run_benchmark. YAML cannot import
+arbitrary Python; the CLI intentionally exposes only the built-in catalog.
+
+  from pydantic import BaseModel, ConfigDict
+  from git_metadata_extractor.experiments.builtins import default_catalog
+  from git_metadata_extractor.experiments.benchmark import run_benchmark
+  from git_metadata_extractor.pipeline.stages.models import ContextBundle
+
+  class Options(BaseModel):
+      model_config = ConfigDict(extra="forbid")
+      label: str = "experiment"
+
+  async def collect(context, providers, options):
+      return ContextBundle(detected_type=context.detected_type,
+                           context={"experiment_label": options["label"]})
+
+  catalog = default_catalog()
+  catalog.register_collector("team.extra", collect, version="1",
+                             options_model=Options)
+
+Append {component: team.extra, options: {label: candidate}} to a profile's
+collectors, then await run_benchmark(profiles, cases, catalog=catalog,
+output_dir=Path(".cache/benchmarks/custom")). A generator factory has signature
+factory(options, cache) and returns a runner(context, providers) -> AgentResult
+(sync or async). Register via catalog.register_agent(name, factory, version=...,
+runtime="llm" or "rule_based", options_model=Options). Bind its name to one of
+repo_agent, person_agent, org_agent, article_agent, membership_agent,
+contribution_agent. Preserve the existing AgentResult/schema contract.
+
+Version custom components whenever their behavior changes. Package source bytes,
+profile settings, declared component versions and public model configuration
+participate in cache fingerprints; external plugin source is not auto-hashed.
+Custom plugins remain responsible for obeying runtime and read-only contracts.
+
+Benchmark interpretation
+------------------------
+The matrix is profiles x corpus cases x repetitions. Trials run sequentially;
+profile order rotates by repetition. Agent parallelism operates within a trial.
+--cache-mode cold gives each trial its own empty provider/agent/pipeline DB.
+--cache-mode warm_pipeline primes that isolated DB before the measured run;
+priming-result.json is retained separately. A cache hit is reported explicitly.
+Shared remote service caches are not cleared. No source ingestion or Oxigraph
+writes are scheduled by the experiment adapter.
+
+manifest.json records configuration and fingerprints. Each trial retains
+result.json (including graph and provenance) and trial.json. summary.json and
+trials.csv include failures as well as successful trials. Failed trials record
+the exception type and phase, avoiding raw provider messages with credentials.
+The CLI returns a nonzero status if any trial fails.
+
+Metrics include elapsed extraction time, entities/triples, warnings, SHACL,
+retrieval events, provenance coverage, model calls and token usage. Cached
+historical model calls are excluded from fresh usage. usage_complete=false
+means token figures are incomplete, not zero cost. Retrieval events include
+provider/tool boundaries and are not an HTTP-request billing counter. No price
+assumptions are used. SHACL requires canonical output and reports skipped
+validation as unknown. Expected-fact recall is measured only over supplied
+facts; it is not precision or a general accuracy score.
+
+Current limits: live source data is not frozen/replayed; repeat results can
+change with upstream data/models. The mock corpus validates mechanics, not
+real-world extraction quality. Compare full LLM and hybrid quality using a
+curated live corpus with expected facts. The experiment model is deliberately
+local; indices remain owned by the separate open-pulse-sources service.

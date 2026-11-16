@@ -1,0 +1,81 @@
+Shared extraction service and provider ownership
+================================================
+The HTTP API and local benchmarks now call the same application use case:
+  git_metadata_extractor.services.extraction.execute_extraction
+
+API adapter -> extraction service -> pipeline stages + providers
+Benchmark   -> extraction service -> pipeline stages + providers
+
+The service takes ExtractionOptions and explicitly injected providers,
+orchestrator, cache and optional execution-profile metadata. It returns an
+ExtractionResult containing response, run_id, cache_hit and classification.
+Expected failures raise ExtractionError carrying the existing typed error DTO;
+the HTTP adapter maps that DTO to the same status codes as before. Unexpected
+stage failures retain the previous fail-closed behavior.
+
+Plain Python example (inside an async function):
+
+  from types import SimpleNamespace
+  from git_metadata_extractor.providers.runtime import (
+      build_provider_resources, close_shared_providers,
+  )
+  from git_metadata_extractor.services.extraction import (
+      ExtractionOptions, execute_extraction,
+  )
+
+  state = SimpleNamespace()
+  resources = build_provider_resources(state, use_mock=True, include_rag=False)
+  try:
+      result = await execute_extraction(
+          ExtractionOptions(
+              source_url="https://github.com/octocat/Hello-World",
+              agent_runtime="rule_based", read_only=True,
+          ),
+          providers=resources.bundle,
+      )
+      graph = result.response.output
+  finally:
+      await resources.aclose()
+      await close_shared_providers(state)
+
+No FastAPI Request or dummy app is needed. Query-log context is restored after
+success, error or cancellation. Benchmarks retain the existing CLI, YAML
+profiles, tool/model scopes, isolated caches and artifact layout.
+
+Ownership rules
+---------------
+build_provider_resources constructs only primary clients not replaced by valid
+injections. Its returned resources own those primary clients. Injected clients
+and injected whole bundles are borrowed; their owner closes them.
+
+RAG registrations live in providers/runtime.py::RAG_PROVIDERS (14 entries).
+Each entry declares its ProviderSet field, environment gate, factory and expected
+type. Successfully constructed RAG clients are cached on the supplied state and
+owned by that state's shared-resource group. Unavailable optional providers can
+be retried on later resolution, preserving previous behavior.
+
+The HTTP dependency closes request-owned clients on completion/error. POST jobs
+take ownership until completion/cancellation, with a completion callback covering
+cancellation before the job body starts. App shutdown cancels and awaits tracked
+jobs, awaits deferred cleanup, then closes shared providers. Cleanup is deduped,
+awaits async clients, continues after individual close failures and can be awaited
+again if a caller is cancelled during cleanup.
+
+ProviderSet.close remains a compatibility method for owned synchronous primary
+clients. ProviderSet.aclose closes an entirely caller-owned bundle. Prefer the
+ProviderResources returned by construction when shared/borrowed clients exist.
+
+Boundaries and compatibility
+----------------------------
+Pipeline gates/constants/helpers now live in pipeline/settings.py. Existing
+api/_helpers.py imports remain available as compatibility names referring to the
+same implementation. Four unused extraction helpers were removed.
+
+HTTP auth, URL routes, error status mapping and auto-ingest hooks remain in the
+API layer. The extraction service owns output/cache/provenance generation and
+configured substrate writes; read_only=True disables those writes. The service
+does not schedule index ingestion. Index ownership remains open-pulse-sources.
+
+No graph schemas, stage order or model prompts changed in this cleanup. This
+batch does not add a bounded job queue or split the large domain-stage modules;
+those are separate follow-ups. Tests now enforce the core's HTTP import boundary.

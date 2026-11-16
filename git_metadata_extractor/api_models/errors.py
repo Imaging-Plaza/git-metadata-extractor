@@ -5,6 +5,10 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from git_metadata_extractor.observation.run_report_models import (
+    RunReport,  # noqa: TC001 - Pydantic schema resolution
+)
+
 
 class V2ErrorType(str, Enum):
     UNSUPPORTED_URL = "unsupported_url"
@@ -26,3 +30,4 @@ class V2ErrorResponse(BaseModel):
     source_url: str | None = None
     detected_path_kind: str | None = None
     errors: list[V2FieldError] | None = None
+    run_report: RunReport | None = None

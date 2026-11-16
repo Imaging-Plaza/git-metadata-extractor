@@ -1,0 +1,80 @@
+[
+  {
+    "file": "hybrid-response.json",
+    "response_schema_valid": true,
+    "entity_types": {
+      "schema:Person": 1,
+      "schema:SoftwareSourceCode": 1,
+      "pulse:Contribution": 1
+    },
+    "shacl_conforms": true,
+    "violations": [],
+    "provenance_nodes": 113,
+    "provenance_types": {
+      "prov:Activity": 37,
+      "prov:Agent": 36,
+      "['prov:Activity', 'gme:Retrieval']": 23,
+      "rdf:Statement": 17
+    },
+    "query_count": 23
+  },
+  {
+    "file": "llm-response.json",
+    "response_schema_valid": true,
+    "entity_types": {
+      "schema:Person": 1,
+      "schema:SoftwareSourceCode": 1,
+      "pulse:Contribution": 1
+    },
+    "shacl_conforms": true,
+    "violations": [],
+    "provenance_nodes": 153,
+    "provenance_types": {
+      "prov:Activity": 38,
+      "prov:Agent": 36,
+      "['prov:Activity', 'gme:Retrieval']": 62,
+      "rdf:Statement": 17
+    },
+    "query_count": 62
+  },
+  {
+    "file": "rule_based-response.json",
+    "response_schema_valid": true,
+    "entity_types": {
+      "schema:Person": 1,
+      "schema:SoftwareSourceCode": 1,
+      "pulse:Contribution": 1
+    },
+    "shacl_conforms": true,
+    "violations": [],
+    "provenance_nodes": 101,
+    "provenance_types": {
+      "prov:Activity": 31,
+      "prov:Agent": 31,
+      "['prov:Activity', 'gme:Retrieval']": 23,
+      "rdf:Statement": 16
+    },
+    "query_count": 23
+  },
+  {
+    "file": "rule_based_full-response.json",
+    "response_schema_valid": true,
+    "entity_types": {
+      "schema:Person": 10,
+      "pulse:Contribution": 10,
+      "org:Organization": 15,
+      "schema:SoftwareSourceCode": 1,
+      "org:Membership": 30
+    },
+    "shacl_conforms": true,
+    "violations": [],
+    "provenance_nodes": 615,
+    "provenance_types": {
+      "prov:Activity": 137,
+      "prov:Agent": 41,
+      "['prov:Activity', 'gme:Retrieval']": 148,
+      "rdf:Statement": 289
+    },
+    "query_count": 148
+  }
+]

@@ -5,6 +5,7 @@ import time
 from importlib.metadata import version as package_version
 from typing import Any
 
+import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
@@ -24,13 +25,28 @@ def _healthy_rate_limit_summary() -> GitHubRateLimitSummary:
     The real `probe_github_rate_limit()` makes a live call to
     `https://api.github.com/rate_limit`, which fails in CI (no live
     GitHub credentials) and reports the github_token component as
-    `unhealthy`. Tests that need a healthy probe stub it.
+    `unhealthy`. `_stub_github_rate_limit_probe` swaps this in for it.
     """
     return GitHubRateLimitSummary(
         status="healthy",
         total_remaining=5000,
         earliest_reset=None,
         tokens=[],
+    )
+
+
+@pytest.fixture(autouse=True)
+def _stub_github_rate_limit_probe(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep every health check in this file off the network.
+
+    With a token set, `/v2/health` runs the probe, which is a live request
+    whose answer is cached module-wide for 30s. Unstubbed, a test depends on
+    GitHub, and on whichever earlier test happened to fill that cache: the
+    latency test passed only when it ran after one that had.
+    """
+    monkeypatch.setattr(
+        "git_metadata_extractor.api.system.probe_github_rate_limit",
+        _healthy_rate_limit_summary,
     )
 
 
@@ -60,10 +76,6 @@ def test_health_returns_healthy_when_all_checks_pass(
     monkeypatch,
 ) -> None:
     monkeypatch.setenv("GME_GITHUB_TOKEN", "test-token")
-    monkeypatch.setattr(
-        "git_metadata_extractor.api.system.probe_github_rate_limit",
-        lambda: _healthy_rate_limit_summary(),
-    )
 
     status_code, payload, _elapsed_ms = _get_json("/v2/health")
 
@@ -104,3 +116,111 @@ def test_health_endpoint_responds_under_100ms(
 
     assert status_code == HTTP_OK
     assert elapsed_ms < HEALTH_ENDPOINT_MAX_MS
+
+
+# --------------------------------------------------------------------------
+# the substrate store component
+# --------------------------------------------------------------------------
+
+
+def test_health_omits_the_substrate_store_when_the_writer_is_off(monkeypatch) -> None:
+    """An opt-in feature that is switched off must not colour the status.
+
+    Reporting the component unconditionally would report every default
+    deployment as degraded for a store it was never asked to write to.
+    """
+    monkeypatch.delenv("V2_SUBSTRATE_ENABLED", raising=False)
+
+    _status_code, body, _elapsed = _get_json("/v2/health")
+
+    assert "substrate_store" not in body["components"]
+
+
+def test_health_reports_the_substrate_store_as_degraded_when_unreachable(
+    monkeypatch,
+) -> None:
+    """The writer fails open, so an unreachable store degrades rather than fails."""
+    import httpx
+
+    from git_metadata_extractor.store import oxigraph
+
+    def handler(_request: httpx.Request) -> httpx.Response:
+        message = "connection refused"
+        raise httpx.ConnectError(message)
+
+    real_from_config = oxigraph.store_from_config
+    monkeypatch.setattr(
+        oxigraph,
+        "store_from_config",
+        lambda url, **kwargs: real_from_config(
+            url,
+            **{**kwargs, "transport": httpx.MockTransport(handler)},
+        ),
+    )
+    monkeypatch.setenv("V2_SUBSTRATE_ENABLED", "true")
+    monkeypatch.setenv("V2_SUBSTRATE_STORE_URL", "http://oxigraph:7878")
+
+    _status_code, body, _elapsed = _get_json("/v2/health")
+
+    assert body["components"]["substrate_store"] == "degraded"
+    assert body["status"] == "degraded"
+
+
+def test_health_reports_the_substrate_store_as_degraded_when_unconfigured(
+    monkeypatch,
+) -> None:
+    """Enabled with nowhere to write: still projected, just not stored."""
+    monkeypatch.setenv("V2_SUBSTRATE_ENABLED", "true")
+    monkeypatch.delenv("V2_SUBSTRATE_STORE_URL", raising=False)
+
+    _status_code, body, _elapsed = _get_json("/v2/health")
+
+    assert body["components"]["substrate_store"] == "degraded"
+
+
+def test_health_reports_the_substrate_store_as_healthy_when_reachable(
+    monkeypatch,
+) -> None:
+    import httpx
+
+    from git_metadata_extractor.store import oxigraph
+
+    def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            text='{"head": {"vars": []}, "results": {"bindings": []}}',
+        )
+
+    real_from_config = oxigraph.store_from_config
+    monkeypatch.setattr(
+        oxigraph,
+        "store_from_config",
+        lambda url, **kwargs: real_from_config(
+            url,
+            **{**kwargs, "transport": httpx.MockTransport(handler)},
+        ),
+    )
+    monkeypatch.setenv("V2_SUBSTRATE_ENABLED", "true")
+    monkeypatch.setenv("V2_SUBSTRATE_STORE_URL", "http://oxigraph:7878")
+
+    _status_code, body, _elapsed = _get_json("/v2/health")
+
+    assert body["components"]["substrate_store"] == "healthy"
+
+
+def test_health_reports_unhealthy_rather_than_500_on_an_unparseable_flag(
+    monkeypatch,
+) -> None:
+    """A typo in an env var must not break the endpoint that exists to say so.
+
+    `substrate_enabled()` raises `ValueError` on a value it cannot parse, the
+    same as every other flag reader in `config.py`. Unwrapped, that surfaces as
+    a 500 from `/v2/health` — the one response an operator cannot act on.
+    """
+    monkeypatch.setenv("V2_SUBSTRATE_ENABLED", "yes-please")
+
+    status_code, body, _elapsed = _get_json("/v2/health")
+
+    assert status_code == HTTP_OK
+    assert body["components"]["substrate_store"] == "unhealthy"
+    assert body["status"] == "unhealthy"

@@ -25,8 +25,7 @@ git_metadata_extractor/agents/llm/
 │   ├── query_orcid.py           # Factory: make_query_orcid_tool(provider)
 │   ├── repository_corpus_grep.py # Factory: make_repository_corpus_grep_tool(corpus)
 │   ├── ror_organization.py      # Factory: make_ror_organization_search_tool(provider)
-│   ├── selenium_fetch.py        # Static tool: fetch_link_content_via_selenium_tool
-│   └── uuid.py                  # Static tools: generate_uuid_v4_tool, generate_uuid_v4_batch_tool
+│   └── selenium_fetch.py        # Static tool: fetch_link_content_via_selenium_tool
 ├── context_summary/             # LLMContextSummaryAgentV2 (+ prompts)
 ├── repository/                  # LLMRepositoryAgentV2 (+ prompts)
 ├── person/                      # LLMPersonAgentV2 (+ prompts)
@@ -177,7 +176,6 @@ if providers.my_provider is not None:
 | `agent_tools/orcid_person.py` | `make_orcid_person_tool(provider)` | Factory | `LLMPersonAgentV2`, `LLMMembershipAgentV2` |
 | `agent_tools/query_dependencies.py` | `make_query_dependencies_tool(github_provider)` | Factory | `LLMRepositoryAgentV2` |
 | `agent_tools/query_orcid.py` | `make_query_orcid_tool(provider)` | Factory | `LLMPersonAgentV2`, `LLMMembershipAgentV2` |
-| `agent_tools/uuid.py` | `generate_uuid_v4_tool`, `generate_uuid_v4_batch_tool` | Static | `LLMArticleAgentV2`, `LLMMembershipAgentV2`, `LLMContributionAgentV2` |
 | `agent_tools/selenium_fetch.py` | `fetch_link_content_via_selenium_tool` | Static | `LLMRepositoryAgentV2`, `LLMPersonAgentV2`, `LLMOrganizationAgentV2`, `LLMArticleAgentV2`, `LLMMembershipAgentV2`, `LLMContributionAgentV2`, `LLMLinkVeracityAgentV2` |
 
 ---
@@ -463,7 +461,7 @@ result = await agent.run(context, providers)
 | `test_records_strict_schema_warnings` | Invalid payload field → `result.warnings` non-empty |
 | `test_builds_tools_from_providers` | Capturing fake records `tools` arg; expected tool names present when providers are set |
 | `test_no_tools_without_providers` | Empty tools list when provider-dependent tools have no provider |
-| `test_works_with_minimal_context` | Accepts context with only the minimum required identifier |
+| `test_works_with_minimal_context` | Accepts context with only the minimum required identifier — only when that differs from the context the other tests already pass (e.g. the person agent's ORCID-only input); otherwise it repeats the metadata test |
 
 ### Validating against agent schema
 
@@ -499,11 +497,16 @@ async def test_real_provider_call():
 
 ### Schemas
 
-LLM output is validated against two schema layers. When your agent introduces a new entity type, you must update schemas in **all three** locations (see `AGENTS.md` for the triplication rule):
+LLM output is validated against two schema layers, each with a single home (the
+former triplication was removed on 2026-09-08 — see `AGENTS.md`):
 
 1. `git_metadata_extractor/schema/json/agent/{entity}.schema.json` — permissive, LLM I/O
-2. `dev/ontology-v2-json-response/a-001/json-schema/agent/pulse_{Entity}Shape.schema.json` — promoted
-3. `tests/v2/fixtures/schema/agent/{entity}.schema.json` — test fixture
+2. `git_metadata_extractor/schema/json/strict/{entity}.schema.json` — strict, post-reconciliation
+
+Note the agent schema pattern-matches identifiers in **canonical URL form**
+(`pulse:githubUsername` must be `https://github.com/<handle>`, not the bare
+handle). `validate_permissive` soft-drops fields that fail, so an agent emitting
+the bare form loses the value silently rather than erroring.
 
 Then regenerate Pydantic models:
 ```bash

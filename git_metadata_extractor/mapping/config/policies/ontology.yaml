@@ -1,0 +1,151 @@
+schema_version: 1
+name: policies.ontology
+version: '1'
+raw_passthrough:
+  schema:Person:
+  - schema:name
+  - org:hasMembership
+  - pulse:hasContribution
+  - pulse:hasAuthoredArticle
+  - pulse:owns
+  org:Organization:
+  - schema:name
+  - pulse:ror
+  - org:hasUnit
+  - org:unitOf
+  - pulse:organizationType
+  - pulse:owns
+  schema:SoftwareSourceCode:
+  - schema:name
+  - schema:author
+  - schema:license
+  - schema:citation
+  - schema:dateCreated
+  - schema:programmingLanguage
+  - pulse:ownedBy
+  - pulse:isForkOf
+  - pulse:repositoryType
+  - pulse:discipline
+  schema:ScholarlyArticle:
+  - schema:name
+  - schema:author
+  - schema:sourceOrganization
+  - schema:dateCreated
+  pulse:Contribution:
+  - pulse:contributionTo
+  - schema:author
+  - pulse:contributionCount
+  - pulse:firstContributionDate
+  - pulse:lastContributionDate
+  - pulse:gitAuthorName
+  - pulse:gitAuthorEmail
+  org:Membership:
+  - org:organization
+  - org:role
+  - pulse:department
+  - pulse:membershipType
+  - pulse:qualification
+  - time:hasBeginning
+  - time:hasEnd
+canonical_passthrough:
+  schema:Person:
+  - schema:name
+  - org:hasMembership
+  - pulse:hasContribution
+  - pulse:hasAuthoredArticle
+  - pulse:owns
+  org:Organization:
+  - schema:name
+  - pulse:ror
+  - org:hasUnit
+  - org:unitOf
+  - pulse:organizationType
+  - pulse:owns
+  schema:SoftwareSourceCode:
+  - schema:name
+  - schema:author
+  - schema:license
+  - schema:citation
+  - schema:dateCreated
+  - schema:programmingLanguage
+  - pulse:ownedBy
+  - pulse:isForkOf
+  - pulse:repositoryType
+  - pulse:discipline
+  schema:ScholarlyArticle:
+  - schema:name
+  - schema:author
+  - schema:sourceOrganization
+  org:Membership:
+  - org:organization
+  - org:role
+  - time:hasBeginning
+  - time:hasEnd
+  pulse:Contribution:
+  - schema:author
+  - pulse:contributionTo
+  - pulse:contributionCount
+  - pulse:firstContributionDate
+  - pulse:lastContributionDate
+  - pulse:gitAuthorName
+  - pulse:gitAuthorEmail
+iri_properties:
+- pulse:codeOfConduct
+- pulse:externalReference
+- pulse:fundingConfig
+- pulse:publicCodeManifest
+- pulse:readme
+- pulse:securityPolicy
+- schema:citation
+- schema:image
+- schema:license
+- schema:url
+platforms:
+  github.com:
+    platform: pulse:GitHub
+    username_index: 0
+  gitlab.com:
+    platform: pulse:GitLab
+    username_index: 0
+  bitbucket.org:
+    platform: pulse:Bitbucket
+    username_index: 0
+  huggingface.co:
+    platform: pulse:HuggingFace
+    username_index: 0
+  orcid.org:
+    platform: pulse:ORCID
+    username_index: -1
+  zenodo.org:
+    platform: pulse:Zenodo
+    username_index: -1
+  infoscience.epfl.ch:
+    platform: pulse:Infoscience
+    username_index: -1
+registry_platforms:
+  ror.org: pulse:ROR
+source_by_property:
+  pulse:orcidIdentifier: pulse:ORCID
+  pulse:ror: pulse:ROR
+profile_ref_properties:
+- pulse:hasProfile
+- pulse:hasOrganizationProfile
+source_url_fields:
+- pulse:infoscienceArticleIdentifier
+index_backed_platforms:
+- pulse:EPFLGraph
+- pulse:ETHZResearchCollection
+- pulse:HuggingFace
+- pulse:Infoscience
+- pulse:ORCID
+- pulse:OpenAlex
+- pulse:ROR
+- pulse:RenkuLab
+- pulse:SNSF
+- pulse:SWISSUbase
+- pulse:Zenodo
+part_of_run_types:
+- org:Organization
+- schema:Person
+- schema:ScholarlyArticle
+- schema:SoftwareSourceCode

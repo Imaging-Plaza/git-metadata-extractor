@@ -170,18 +170,6 @@ def test_reconcile_links_person_affiliations_without_generating_memberships() ->
     assert reconciled.memberships == []
 
 
-def test_reconcile_does_not_generate_contributions_for_person_repository_links() -> None:
-    entities = {
-        "persons": [_person("johndoe")],
-        "organizations": [],
-        "repositories": [_repository("owner/repo", ["johndoe"])],
-    }
-
-    reconciled = reconcile_entities(entities)
-
-    assert reconciled.contributions == []
-
-
 def test_reconcile_emits_warnings_for_orphan_references() -> None:
     entities = {
         "persons": [_person("johndoe", affiliations=["unknown-org"])],

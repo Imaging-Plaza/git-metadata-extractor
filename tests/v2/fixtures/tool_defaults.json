@@ -1,0 +1,73 @@
+{
+  "repo_agent": [
+    "list_disciplines",
+    "fetch_link_content_via_selenium",
+    "query_dependencies",
+    "search_huggingface_rag",
+    "lineage_huggingface",
+    "search_renkulab_rag",
+    "search_github_rag",
+    "search_epfl_graph_disciplines",
+    "search_federated_rag",
+    "lookup_entity_federated"
+  ],
+  "person_agent": [
+    "fetch_link_content_via_selenium",
+    "hash_user_email",
+    "search_infoscience_person",
+    "get_orcid_record",
+    "query_orcid",
+    "search_infoscience_rag",
+    "fetch_infoscience_chunks",
+    "fetch_infoscience_records",
+    "search_ethz_research_collection_rag",
+    "fetch_ethz_research_collection_chunks",
+    "fetch_ethz_research_collection_records",
+    "search_orcid_rag",
+    "search_renkulab_rag",
+    "search_snsf_rag",
+    "search_epfl_graph_disciplines"
+  ],
+  "org_agent": [
+    "fetch_link_content_via_selenium",
+    "get_github_organization_metadata",
+    "search_organization_identity",
+    "search_infoscience_rag",
+    "fetch_infoscience_chunks",
+    "fetch_infoscience_records",
+    "search_ethz_research_collection_rag",
+    "fetch_ethz_research_collection_chunks",
+    "fetch_ethz_research_collection_records",
+    "search_ror_rag",
+    "search_snsf_rag",
+    "search_huggingface_rag",
+    "search_openalex_rag",
+    "search_renkulab_rag",
+    "search_federated_rag",
+    "lookup_entity_federated",
+    "search_epfl_graph_disciplines"
+  ],
+  "article_agent": [
+    "fetch_link_content_via_selenium",
+    "search_infoscience_publications",
+    "search_infoscience_rag",
+    "fetch_infoscience_chunks",
+    "fetch_infoscience_records",
+    "search_ethz_research_collection_rag",
+    "fetch_ethz_research_collection_chunks",
+    "fetch_ethz_research_collection_records",
+    "search_openalex_rag",
+    "search_zenodo_rag",
+    "fetch_zenodo_records",
+    "search_oamonitor_rag",
+    "fetch_oamonitor_records",
+    "search_renkulab_rag",
+    "search_swissubase_rag",
+    "search_epfl_graph_disciplines"
+  ],
+  "membership_agent": [
+    "fetch_link_content_via_selenium",
+    "get_orcid_record",
+    "query_orcid"
+  ]
+}

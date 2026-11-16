@@ -1,0 +1,34 @@
+Agent evidence provenance — local implementation plan
+
+Goal: expose the producing agent/model, consulted sources and retrieval queries
+alongside final values, without pretending that consulting a source proves a fact.
+Base: Robin's feat/provenance-layers, 442e921. Work remains local.
+
+Design: use a request-scoped trace and task-local activity scopes. Observe provider
+reads (including cached reads), tool query attempts, LLM calls, agent outputs and
+post-agent transformations. Export a sibling JSON-LD provenance document and an
+append-only per-run evidence named graph when substrate persistence is enabled.
+Keep canonical entity schemas unchanged. Store source identifiers and query
+metadata, never credentials, prompts or full provider responses. Only final public
+values become exported assertions. Exact value matches are labelled candidates;
+explicit citations are validated against records actually retrieved by the agent.
+Agent verdict cache retains original evidence; pipeline cache is versioned.
+
+Alternatives: adding fields to every entity would break closed schemas; logging
+only queries cannot explain the output. A separate evidence graph supports the
+existing output contracts and leaves Robin's platform graph routing unchanged.
+
+Tasks (implemented inline):
+1. Add failing tests for concurrent agent/query attribution, successful/failed
+   retrievals, explicit citation validation, secret redaction and final assertions.
+   Implement observation/evidence.py plus provider observation adapters.
+2. Wire agent retry, model runtime, hybrid refiners, query logging and pipeline
+   transformations. Test cache reuse and integration with real stage execution.
+3. Return provenance in the API, persist the same graph with the substrate, version
+   pipeline cache. Verify RDF round-trip, no internal fields and endpoint output.
+4. Run focused tests then the deterministic tests/v2 suite in the existing Docker
+   validation image; review the diff and document API semantics and limitations.
+
+Review focus: asynchronous cross-talk, cached evidence claiming a fresh query,
+failed/empty queries cited as evidence, dropped/private fields leaking through
+provenance, and model output mistaken for independently observed source data.

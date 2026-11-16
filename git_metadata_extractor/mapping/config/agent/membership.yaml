@@ -1,0 +1,16 @@
+schema_version: 1
+name: agent.membership
+version: '1'
+source_contract: prepared.agent.membership
+target_contract: agent.membership
+fields:
+  id: {sources: [id], empty: preserve, missing: 'null'}
+  type: {value: 'org:Membership', empty: preserve, missing: 'null'}
+  shacl: {value: 'pulse:MembershipShape', empty: preserve, missing: 'null'}
+  identifiers.pulse:composite: {sources: [identifiers_pulse_composite], empty: preserve, missing: 'null'}
+  identifiers.uuid: {sources: [identifiers_uuid], empty: preserve, missing: 'null'}
+  idSource: {value: 'pulse:composite', empty: preserve, missing: 'null'}
+  org:organization: {sources: [organization], empty: preserve, missing: 'null'}
+  org:role: {sources: [role], empty: preserve, missing: 'null'}
+  time:hasBeginning: {sources: [hasBeginning], empty: preserve, missing: 'null'}
+  time:hasEnd: {sources: [hasEnd], empty: preserve, missing: 'null'}

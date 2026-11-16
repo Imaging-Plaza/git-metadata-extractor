@@ -1,19 +1,19 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
 import pytest
 from jsonschema import validate
 
+from git_metadata_extractor.models import InternalModel
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 STRICT_FIXTURE_DIR = REPO_ROOT / "tests" / "v2" / "fixtures" / "schema" / "strict"
 
 
-@dataclass(frozen=True)
-class StrictEntityCase:
+class StrictEntityCase(InternalModel, frozen=True):
     schema_name: str
     fixture_file_name: str
     minimum_count: int
@@ -82,9 +82,7 @@ for entity, case in ENTITY_CASES.items():
         instance_id = str(instance.get("id", f"index-{instance_index}"))
         INSTANCE_PARAMS.append(
             pytest.param(
-                entity,
                 case.schema_name,
-                instance_index,
                 instance,
                 id=f"{entity}-{instance_index}-{instance_id}",
             ),
@@ -99,18 +97,11 @@ def test_strict_fixtures_have_required_minimum_instances(
     assert len(ENTITY_FIXTURES[entity_type]) >= case.minimum_count
 
 
-@pytest.mark.parametrize(
-    ("entity_type", "schema_name", "instance_index", "instance"),
-    INSTANCE_PARAMS,
-)
+@pytest.mark.parametrize(("schema_name", "instance"), INSTANCE_PARAMS)
 def test_strict_fixture_instance_validates_against_strict_schema(
     load_schema: Callable[[str, str], dict[str, Any]],
-    entity_type: str,
     schema_name: str,
-    instance_index: int,
     instance: dict[str, Any],
 ) -> None:
-    assert entity_type in ENTITY_CASES
-    assert instance_index >= 0
     schema = load_schema("strict", schema_name)
     validate(instance=instance, schema=schema)

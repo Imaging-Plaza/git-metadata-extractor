@@ -1,0 +1,8 @@
+schema_version: 1
+name: agent.repository_classification
+version: '1'
+source_contract: prepared.agent.repository_classification
+target_contract: agent.repository
+fields:
+  pulse:repositoryType: {sources: [repositoryType], empty: preserve, missing: 'null'}
+  pulse:discipline: {sources: [discipline], empty: preserve, missing: 'null'}

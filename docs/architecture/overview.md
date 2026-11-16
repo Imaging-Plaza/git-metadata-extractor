@@ -1,5 +1,9 @@
 # Architecture Overview
 
+Start with the [visual field guide](../guide/index.html) for C4 diagrams and
+animated sequences, or the [maintenance guide](maintenance.md) for mapping and
+ontology changes.
+
 How the service is put together: the layers, what each owns, and the seams
 where things go wrong. For the stage-by-stage tour see
 [V2 Extract Pipeline](../v2-pipeline.md); for the index-layer split see
@@ -7,41 +11,34 @@ where things go wrong. For the stage-by-stage tour see
 
 ---
 
-## Two services, one data volume
+## Two services with an HTTP boundary
 
-Since `3.0.0` the system is two deployables. The split is by **read vs write**,
-not by domain:
+The extractor owns ontology graph construction. Sources owns index retrieval,
+embedding and storage; the extractor does not install the sources library.
 
 ```mermaid
 flowchart LR
     CLIENT([client]) -->|"GET/POST /v2/extract"| API
-
-    subgraph GME["gme-api · this repo"]
-        API[FastAPI app<br/>api/ package]
-        PIPE[pipeline/<br/>orchestrator + stages]
-        AGENTS[agents/<br/>llm · rule_based · refiners]
-        PROV[providers/<br/>GitHub · ROR · ORCID · Infoscience · RAG readers]
-        API --> PIPE --> AGENTS --> PROV
+    subgraph GME["gme-api"]
+        API[FastAPI app] --> PIPE[pipeline and agents] --> PROV[HTTP providers]
+        API --> CACHE[(Extraction cache)]
     end
-
-    subgraph SOURCES["gme-sources · open-pulse-sources repo"]
-        MGMT["/v2/indices/* + /v2/manifest<br/>ingest · embed · reset"]
+    subgraph SOURCES["gme-sources"]
+        RET["/v2/retrieval + /v2/extractor"] --> STORE[(DuckDB)]
+        RET --> QDRANT[(Qdrant)]
+        MGMT["/v2/indices management"] --> STORE
+        MGMT --> QDRANT
     end
-
-    PROV -->|read| STORE[(DuckDB stores<br/>gme-data volume)]
-    PROV -->|search| QDRANT[(Qdrant)]
-    MGMT -->|write| STORE
-    MGMT -->|write| QDRANT
-    PROV -->|"library import<br/>open_pulse_sources"| LIB[[pinned wheel]]
-    API -->|HTTP| GIMIE[gme-gimie-api sidecar]
-    AGENTS -->|optional| SEL[gme-selenium]
+    PROV -->|authenticated HTTP| RET
+    API -->|HTTP| GIMIE[GIMIE sidecar]
+    PIPE -->|optional| SEL[Selenium]
 ```
 
-The consequence worth internalising: **this service reads index state that
-another service writes, over a shared volume.** DuckDB's file lock is
-per-process and the locks in either service are process-local, so nothing
-enforces a single writer across the two. Keep heavy ingest on `gme-sources`.
-That gap is tracked as task 05 in `dev/split-rag-indices/`.
+Only sources mounts the index volume. The extractor keeps a separate cache
+volume and submits optional indexing jobs over HTTP. Sources runs one writer
+worker; this separation does not make DuckDB multi-process writes safe.
+Missing sources yields explicit unavailable retrieval, never a local fallback.
+
 
 ---
 
@@ -49,12 +46,12 @@ That gap is tracked as task 05 in `dev/split-rag-indices/`.
 
 ```
 git_metadata_extractor/
-  app.py              FastAPI app: mounts the /v2 router, /docs UI, startup bootstrap
+  app.py              FastAPI app: mounts the /v2 router and /docs UI
   api/                the HTTP surface (URL prefix /v2 — the public contract)
     _router.py        the single APIRouter
     _helpers.py       env gates, stage constants, app-state resolution
-    extract.py        GET/POST /extract, _run_extract_job, post-agent sequencing
-    auto_ingest.py    post-extract index write-through (opt-in, off by default)
+    extract.py        GET/POST /extract, _run_extract_job, HTTP/job adapters
+    auto_ingest.py    source indexing job submission (opt-in, off by default)
     jobs.py           /jobs/{id}, cancel, /crawl
     system.py         /cache/clear, /health
   jobs.py             async job store backing POST /v2/extract
@@ -65,7 +62,12 @@ git_metadata_extractor/
 
   pipeline/
     orchestrator.py   agent plans (PLAN_BY_TYPE), fan-out concurrency, retries
+    run.py            ordered post-agent stage chains
     stages/           one module per stage
+
+  services/extraction.py  extraction lifecycle, cache lookup, stage-chain execution
+  mapping/            typed YAML loader, field engine, target/policy checks
+    config/           per-source/entity mappings + shared policies (packaged)
 
   agents/
     models.py         AgentResult, ProviderSet, TypedEntityBuckets
@@ -73,10 +75,10 @@ git_metadata_extractor/
     llm/<kind>/       per-entity LLM agents (one Pydantic AI run each)
     llm/agent_tools/  tool factories (selenium, ROR, ORCID, *_rag.py per index)
     rule_based/       deterministic counterparts, no LLM
-    refiners/         hybrid-runtime patchers over rule-based output
+    llm/refiners/     typed hybrid refiners and affiliation/rescue agents
 
   providers/          the READ layer: GitHub, ROR, ORCID, Infoscience, gimie,
-                      *_rag.py Qdrant-backed readers, cache.py (SQLite/WAL)
+                      *_rag.py HTTP adapters to sources, cache.py (SQLite/WAL)
   schema/             JSON Schemas (agent + strict), JSON-LD context, models
   validation/         strict-schema + SHACL validators
   canonicalization/   ID resolution, string normalisation
@@ -89,6 +91,52 @@ Two conventions that are easy to trip over:
   until `3.0.0`. Docs or notes referring to `src/v2/api.py` predate the split.
 - **`experimental/` is quarantined on purpose.** Nothing in it is wired into
   the request path; treat it as a sketchpad.
+
+---
+
+## Source-to-ontology mappings
+
+The deterministic path is **source records → prepared facts → agent payloads →
+reconciled intermediate graph → raw/canonical projections**. Providers and
+adapters fetch records, normalize identifiers/dates and match people or
+organizations. YAML maps those facts into ontology fields; Python still builds
+relationships and runs reconciliation, inference and graph validation.
+
+Mappings are split by source and entity under
+`git_metadata_extractor/mapping/config/`: `github/`, `orcid/`, `ror/` and
+`infoscience/` enrich source fields; `agent/` builds the six rule-based entity
+payloads; `raw/` and `canonical/` define projection fields. This keeps a source's
+meaning and a target's shape local instead of combining every source into one
+large mapping. Raw and canonical projections consume the same intermediate;
+raw projection runs first so canonical projection cannot discard source facts.
+
+Three shared policy files hold ontology routing/source attribution, extraction
+classification, and unifier identity/merge choices. The unifier consumes the
+stored raw graphs to build a canonical graph; its graph algorithms remain Python.
+YAML does not replace LLM prompts or change pipeline stage order.
+
+Pydantic validates mapping and policy configuration. Target names are checked
+against generated models: agent models come from the agent JSON Schemas;
+raw/canonical models come from the pinned ontology. Runtime strict JSON Schema
+and SHACL validation still check actual outputs. A valid field name alone does
+not prove that a source value has the right meaning.
+
+Use the [mapping editing guide](https://github.com/Imaging-Plaza/git-metadata-extractor/blob/main/git_metadata_extractor/mapping/config/README.txt)
+as the detailed reference for syntax, policy ownership, validation and adding a
+source. Inspect the current inventory without maintaining a second field list:
+
+```bash
+python -m git_metadata_extractor.mapping
+python -m git_metadata_extractor.mapping --check
+python -m git_metadata_extractor.mapping --schema
+```
+
+Mapping/policy content, generated target contracts and mapping code contribute
+to a fingerprint used by pipeline and agent verdict caches. Restart after edits:
+configurations and fingerprints are cached for the process lifetime. Mapping
+activities record the fingerprint and contract/version information in the
+separate evidence graph, not on canonical entities. This identifies the mapping
+used; it does not archive source responses or prove a field's source attribution.
 
 ---
 
@@ -131,13 +179,18 @@ same in all three.
 |---|---|---|---|
 | `rule_based` | deterministic agents | **none** — guaranteed LLM-free, `link_veracity` always skipped | reproducible runs, tests, batch |
 | `llm` | LLM agents (one Pydantic AI run per entity) | `context_summary`, `llm_dedup`, `llm_critic` (gated), `link_veracity`, `org_relationships`, `resolve_bio_to_ror_llm` | best coverage |
-| `hybrid` | rule-based generators **+** `refine_with_llm` | only the refiner — dedup/critic/veracity/org-relationships are skipped | cheap targeted improvement |
+| `hybrid` | rule-based generators **+** `refine_with_llm` | refiners plus enabled bio-affiliation and GitHub-parent LLM resolution; dedup/critic/veracity/org-relationships are skipped | targeted enrichment of deterministic output |
 
-The hybrid refiner patches a **whitelist** only: organization
-`pulse:OrganizationType`; repository `pulse:discipline` and
-`pulse:repositoryType` (the latter only when it is currently `pulse:Other`);
-person `schema:name` (only when it looks like a GitHub handle). Anything
-outside that list is ignored by design — the refiner cannot invent entities.
+Hybrid refinement uses typed patch contracts and acceptance checks for people,
+organizations, repositories and memberships. The accepted fields and rescue/link
+logic live in `pipeline/stages/refine_with_llm.py`; the old three-field summary
+does not describe the expanded implementation. Runtime flags and selected
+components determine which optional work actually runs.
+
+Request `include_run_report=true` for an observed execution report across both
+the generation plan and post-processing stages. It records actual outcomes,
+activity/retrieval links, field-change summaries, validation and usage; cache reuse
+is explicitly separate from fresh work. See the [API contract](../v2-api-reference.md#optional-run-report).
 
 ---
 

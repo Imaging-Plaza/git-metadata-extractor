@@ -1,0 +1,87 @@
+Proposal adoption validation — 2026-11-11
+
+Baseline: 55461aa4409555beeee9481e54d767b0067906e2.
+Proposal: 0908b07b379d0f0b51c2032f478aed94cd08ef46.
+Ontology pin unchanged: 83074e9e41de6d813d7352b2ca9706c08f202098.
+
+Behavior and files
+
+- pipeline/stages/jsonld_build.py shares identity/reference normalization
+  between public output and a private source-fact graph. pipeline/state.py
+  excludes that graph from serialization; pipeline/run.py supplies it to raw
+  projection. Public output behavior and the legacy flat-input fallback remain.
+- pipeline/stages/raw_projection.py applies GitHub-specific extras only to
+  GitHub profiles and strips nested internal keys from projected output.
+- mapping/config/raw/{repository,person_profile,organization_profile}.yaml
+  versions become 2. GitHub biography no longer falls back to ORCID; programming
+  language no longer becomes natural language; bare Twitter handles no longer
+  become RDF links. mapping/{models,registry}.py provides web_iri, requiring an
+  explicit HTTP(S) URL and validating/normalizing it with Pydantic.
+- tests/v2/test_projection_input.py and test_yaml_mappings.py cover the real
+  stage boundary, source graph placement, public/debug behavior, nested private
+  fields, normalized IDs, zero/false values, URL validation and RDF conformance.
+- README.md, AGENTS.md, docs/v2-pipeline.md and the mapping editing guide document
+  the boundary. dev/ retains 39 missing historical proposal artifacts; four
+  existing Robin files remain byte-identical. adoption.txt assesses all 22 asks.
+
+Environment and commands
+
+Docker image gme-local-contract-validation:20261111, Python 3.12, network disabled.
+The worktree was mounted at /work/gme. Native just recipes reference POSIX .venv
+paths, so their Python commands were run directly in the validation container.
+
+1. pytest tests/v2/test_projection_input.py -q --tb=short
+   Reproduced missing archived/follower metadata and the false language mapping.
+   Subsequent focused regressions reproduced nested private-key leakage and
+   relative website IRIs before their respective fixes.
+2. python -m pytest tests/v2/ -q -n 4 --dist=loadfile
+   -m 'not live_provider and not llm_integration' --no-cov
+   -p no:cacheprovider --tb=short --disable-warnings
+   Final result: 1,936 passed, 1 skipped, 2,520 existing dependency/test warnings.
+   Six new pipeline regressions and seven URL-mapping cases pass.
+3. python -m git_metadata_extractor.mapping --check
+   Passed: 23 mappings, 3 policies.
+   Fingerprint: 2bf9dbdba9f86d876ec3ed02420ed1a332a46a42f24183ab1f7325bad26d0367.
+4. python scripts/v2/generate_from_ontology.py --check
+   python scripts/v2/generate_v2_models.py --check
+   Both passed; generated models current.
+5. python scripts/v2/prepare_ontology.py --check (native, Git available)
+   Passed: pinned ontology ready, zero local patches.
+6. python -m mkdocs build --strict (isolated copy of docs and mkdocs.yml)
+   Passed. Existing Material maintenance notice only.
+7. Ruff check on changed Python files, ignoring EXE002 caused by Windows bind
+   mount executable bits: one existing RUF100 on run.py's SLF001 suppression.
+   Confirmed that exact suppression exists at baseline HEAD; no new diagnostics.
+8. Proposal import verification via git show and SHA-256 checks:
+   39 imports preserve source content; three have README notices prepended,
+   and two have inherited whitespace defects removed (manifest records both).
+   Four existing files retain their recorded pre-import hashes. Historical
+   scripts were not executed and historical measurements are not current tests.
+9. Changed/untracked-file credential-pattern scan: no findings.
+   git diff --check: passed; staged check exposed two inherited archive
+   whitespace defects, corrected and recorded in the import manifest.
+10. Built wheel in an isolated temporary copy, verified all 26 YAML resources
+    and the editing guide, then ran mapping --check outside the checkout.
+    Passed with the same mapping fingerprint as the source tree.
+
+Independent review
+
+Source-preservation review identified relative Twitter/website IRI risks; both
+were corrected and re-reviewed with no remaining blockers. The proposal audit
+checked actual pinned shapes and generated/runtime support, not version labels.
+
+Limits and follow-ups
+
+- This is selective adoption on top of Robin's work, not a merge of the proposal
+  branch or implementation of all 22 requests. No ontology/schema constraints
+  were relaxed. Package identities, extra affiliations and raw Project require
+  coordinated upstream changes; other compatible ideas remain in adoption.txt.
+- Existing reconciled email can come from context or GitHub and still lacks
+  source-aware profile routing. It was not changed or newly exposed here.
+- Bare website domains and Twitter handles remain internal facts; a future
+  explicit normalization rule can promote them once semantics are agreed.
+- Restart after deployment: mapping versions/fingerprints change cache keys.
+  The private graph adds an in-memory copy per extraction; it is never persisted
+  as a public artifact. Existing substrate writes remain opt-in.
+- Validation was offline. No live providers, services, indices or stored graphs
+  were modified or benchmarked by this addition.

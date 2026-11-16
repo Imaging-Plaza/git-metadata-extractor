@@ -1,0 +1,11 @@
+schema_version: 1
+name: canonical.organization_profile
+version: '1'
+source_contract: prepared.canonical.organization_profile
+target_contract: canonical.organization_profile
+fields:
+  '@id': {sources: [id], empty: preserve, missing: 'null'}
+  '@type': {value: 'pulse:OrganizationProfile', empty: preserve, missing: 'null'}
+  pulse:platform: {sources: [platform], empty: preserve, missing: 'null'}
+  pulse:organizationHandle: {sources: [organizationHandle], empty: preserve, missing: 'null'}
+  pulse:organizationProfileOf: {sources: [organizationProfileOf], empty: preserve, missing: 'null'}

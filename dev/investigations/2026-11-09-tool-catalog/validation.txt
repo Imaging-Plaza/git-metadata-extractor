@@ -1,0 +1,84 @@
+Shared tool catalog validation - 2026-11-09
+==========================================
+Workspace: D:/pro/git-metadata-extractor-provenance
+Branch: feat/agent-evidence-provenance
+All changes local and uncommitted. No pushes, deployments or secret-file edits.
+Earlier provenance and pipeline-profile work is preserved in the same worktree.
+
+Files and behavior
+------------------
+New agents/tool_catalog.py: typed/versioned registration, provider dependencies,
+reusable bundles, extend/replace selections, name collision checks, task-local
+scope and fingerprint. Options are validated before construction; factories
+remain lazy with respect to external I/O.
+
+New agents/llm/tool_defaults.py: 37 tool registrations and four reusable bundles.
+Replaces repeated tool construction in repository, person, organization, article,
+membership, contribution and context_summary agents. Existing defaults preserved.
+
+New agents/llm/agent_tools/github_repository.py: optional bounded read tool for
+metadata, README, releases and auxiliary files. Uses existing GitHub provider;
+no new provider service/dependency. Calls run in a worker thread and return the
+source URL and an explicit truncation flag.
+
+experiments/{models,catalog,execution,__main__}.py: validated per-role toolsets,
+catalog metadata in profile fingerprints, scoped extraction, CLI discovery.
+agents/llm/_verdict_cache.py and api/extract.py: include active tool fingerprint
+so direct callers cannot reuse a result generated with a different toolset.
+Unscoped verdict keys remain compatible.
+
+config/pipelines/llm_tools.yaml: extend repository tools and replace article
+tools in a benchmark-ready profile. Tests added in test_tool_catalog.py and
+test_api_extract_stub.py, plus fixtures/tool_defaults.json captured from the
+pre-refactor builders. Usage and design notes live beside this report.
+
+Commands and evidence
+---------------------
+Python checks used Docker gme-local-validation:20261109 with --network none and
+source bind-mounted at /work/gme, working directory /work/gme.
+
+  python -m pytest tests/v2/test_tool_catalog.py -q --no-cov -p no:cacheprovider --tb=short
+  Initial RED: five failures for absent catalog/profile functionality.
+
+  python -m pytest tests/v2/test_tool_catalog.py tests/v2/test_llm_contribution_agent.py tests/v2/test_llm_context_summary_agent.py -q --no-cov -p no:cacheprovider --tb=short
+  => 19 passed after fixing required fallback-provider handling and a removed
+     provider variable in the contribution agent.
+
+  python -m pytest tests/v2/test_tool_catalog.py -k direct_tool_scope -q --no-cov -p no:cacheprovider --tb=short
+  RED reproduced identity-only cache reuse across distinct tool selections.
+  Fixed by scoped catalog/selection fingerprints; regression passes below.
+
+  python -m pytest tests/v2/ -q -n 4 --dist=loadfile -m "not live_provider and not llm_integration" --no-cov -p no:cacheprovider --tb=short
+  => 1843 passed, 1 skipped, 2501 warnings in 36.14 seconds.
+     Covers tool composition/options, unavailable providers, collisions,
+     concurrent scopes, restored scopes, real-agent selection, versioned cache
+     fingerprints, bounded lazy retrieval and both cache layers.
+
+  ruff check git_metadata_extractor/agents/tool_catalog.py git_metadata_extractor/agents/llm/tool_defaults.py git_metadata_extractor/agents/llm/agent_tools/github_repository.py git_metadata_extractor/experiments tests/v2/test_tool_catalog.py --ignore EXE002
+  => All checks passed. EXE002 excluded for Windows bind-mount executable bits.
+
+  python -m git_metadata_extractor.experiments validate config/pipelines/llm_tools.yaml
+  => valid; 37 tools, 4 bundles in the emitted manifest.
+
+  git diff --check
+  => passed.
+
+Old inline builders from HEAD were executed against a complete inert provider
+bundle and compared with the new catalog: repository 10, person 15, organization
+17, article 16 and membership 3 tools, identical model-facing names and order.
+The captured names form the regression fixture. Existing context summary/scout
+and contribution tests also pass.
+
+Independent read-only review found the direct-scope cache issue; it was fixed
+and re-reviewed with no further findings. Logs are retained locally under
+D:/pro/git-metadata-extractor/.staging/tools-{red,integrated,cache-red,full}.txt.
+
+Limits
+------
+No live model calls or performance rankings were produced. Smaller toolsets are
+available for comparison, but this change does not establish latency savings.
+Selections affect model tools, not deterministic prefetches or post-processing.
+Hybrid refiners retain their existing tool wiring. Factories/plugins are trusted
+Python code: register before running, bump versions on behavior changes, and
+honor read-only and provider ownership contracts. Explicit required tools fail
+when their dependencies are unavailable; optional tools may be skipped.

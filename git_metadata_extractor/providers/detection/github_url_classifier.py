@@ -151,7 +151,7 @@ def _probe_account_type(account_name: str) -> str | None:
     return None
 
 
-def classify_github_url(url: str) -> GitHubURLClassification:
+def classify_github_url(url: str, *, probe_accounts: bool = True) -> GitHubURLClassification:
     _, hostname, path_segments = _parse_url(url)
     configured_host, configured_path_segments = _parse_github_base_url()
 
@@ -193,7 +193,7 @@ def classify_github_url(url: str) -> GitHubURLClassification:
         # owns N repos. Probe the GitHub API to find the actual type;
         # fall back to USER on any failure so behaviour is identical
         # to the legacy path when GitHub is unreachable.
-        probed = _probe_account_type(owner)
+        probed = _probe_account_type(owner) if probe_accounts else None
         detected_type = (
             GitHubURLType.ORGANIZATION
             if probed == "Organization"

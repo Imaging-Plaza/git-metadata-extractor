@@ -48,7 +48,7 @@ def test_repository_agent_output_validates_against_agent_schema(
     # honest empty answers behind a noisy default. Octocat's
     # Hello-World fixture has no domain hints, so an empty list is
     # the correct output.
-    assert isinstance(result.data["pulse:discipline"], list)
+    assert result.data["pulse:discipline"] == []
     assert "contributors" not in result.data
 
     derivation = result.stats.get("derivation")

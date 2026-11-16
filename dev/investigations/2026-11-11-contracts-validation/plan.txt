@@ -1,0 +1,46 @@
+Typed pipeline contracts, source-service client and validation audit
+
+Goal: strengthen the existing local architecture, with verified schema and
+validation boundaries. Implement inline with executing-plans; use independent
+review for correctness. All changes stay local and uncommitted.
+
+Design and scope
+1. Separate data-model configuration from runtime-object configuration. Give
+   pipeline context concrete types, replace production extras keys with typed
+   artifacts, and record typed outcomes for stages. Required-stage gate errors
+   must respect fail-closed policy. Keep extension metadata JSON-only.
+2. Repair confirmed validation defects: strict format validation; canonical
+   publication must refuse skipped validation; generated cardinality parity;
+   nested metadata removal and permissive schema handling. Verify actual schema
+   layout before editing; do not recreate removed promoted schema directories.
+3. Implement a typed HTTP client for the installed sources service's real
+   /v2/manifest and /v2/indices/<index>/search contracts, and expose these through
+   reusable catalog tools. Configured remote mode must not create local index
+   clients or fall back silently. Preserve legacy mode when no endpoint is set.
+   Existing service lacks record/chunk fetch endpoints: report this capability
+   limit rather than invent endpoints or source snapshot/embedding metadata.
+4. Test contracts and failure paths before implementation, then full offline
+   deterministic suite, schema/codegen checks, scoped lint and independent review.
+
+Files: models.py; pipeline/{state,runner,run}.py; services/extraction.py;
+validation/{schema_validation,layers}.py; agents/models.py;
+scripts/v2/generate_from_ontology.py; affected generated files if required;
+providers/sources_service.py and runtime.py; llm/agent_tools/sources_service.py;
+llm/tool_defaults.py; matching tests and local usage/validation records.
+
+Compatibility: public HTTP schema and stage order stay stable. New source tools
+are optional unless remote sources are configured. Retain the pinned sources
+dependency for legacy operation; do not change images or deploy services.
+Tests must distinguish outage from no matches, skipped validation from pass,
+and optional-stage failures from required-stage failures.
+
+Execution ledger
+1. Complete: typed pipeline artifacts, invocation outcomes and failure policy.
+2. Complete: validation boundary fixes and generated cardinality constraints;
+   verified the actual schema layout before changing generated models.
+3. Complete: remote manifest/search client, tools, provider wiring, provenance
+   and backend cache isolation, with explicit unsupported-capability outcomes.
+4. Complete: regression tests, independent review, 1889 passing offline tests,
+   both generation checks, lock validation and no new scoped lint diagnostics.
+See validation.txt for commands/evidence and usage.txt for configuration and
+remaining service-contract limitations. Changes remain local and uncommitted.

@@ -23,7 +23,14 @@ import logging
 from typing import Any
 
 from git_metadata_extractor.agents.models import AgentResult
+from git_metadata_extractor.agents.tool_catalog import current_tool_fingerprint
+from git_metadata_extractor.mapping import mapping_manifest
+from git_metadata_extractor.observation.evidence import get_trace
 from git_metadata_extractor.providers.cache import ProviderCache
+from git_metadata_extractor.providers.sources_service import (
+    current_source_mode,
+    current_sources_fingerprint,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -39,15 +46,26 @@ def get_cached_agent_verdict(
 
     Root extractions never hit the cache — see module docstring.
     """
-    if cache is None or not identity or is_root:
+    # Verdict packets do not retain the snapshot identities actually queried.
+    # Re-run snapshot agents until that historical observation can be replayed.
+    if cache is None or not identity or is_root or current_source_mode() == "snapshot":
         return None
-    key = ProviderCache.make_key("agent", agent_name, **identity)
+    key = _verdict_key(agent_name, identity)
     cached = cache.get(key)
     if not isinstance(cached, dict):
         return None
     payload = cached.get("data")
     if not isinstance(payload, dict):
         return None
+    trace = get_trace()
+    if trace is not None:
+        packet = cached.get("provenance")
+        trace.restore(packet)
+        current = trace.activities.get(trace.active_id())
+        if current is not None:
+            current["cache_hit"] = True
+            current["kind"] = "cache_reuse"
+            current["reused"] = list((packet or {}).get("activities", {}))
     logger.info(
         "agent cache hit: %s identity=%s",
         agent_name,
@@ -75,9 +93,12 @@ def store_agent_verdict(
     result: AgentResult,
 ) -> None:
     """Cache `result` for future lookups when it is complete and identifiable."""
-    if cache is None or not identity or result.is_partial:
+    if cache is None or not identity or result.is_partial or current_source_mode() == "snapshot":
         return
-    key = ProviderCache.make_key("agent", agent_name, **identity)
+    key = _verdict_key(agent_name, identity)
+    trace = get_trace()
+    if trace is not None:
+        trace.observe(result.data)
     cache.set(
         key,
         {
@@ -85,8 +106,18 @@ def store_agent_verdict(
             "warnings": list(result.warnings),
             "raw_output": result.raw_output,
             "stats": result.stats,
+            "provenance": trace.snapshot() if trace is not None else None,
         },
     )
+
+
+def _verdict_key(agent_name: str, identity: dict[str, Any]) -> str:
+    fingerprint = current_tool_fingerprint()
+    parameters = {**identity, "tool_catalog_fingerprint": fingerprint} if fingerprint else identity
+    if backend := current_sources_fingerprint():
+        parameters = {**parameters, "sources_backend": backend}
+    parameters = {**parameters, "mapping_fingerprint": mapping_manifest()["fingerprint"]}
+    return ProviderCache.make_key("agent", agent_name, **parameters)
 
 
 __all__ = ["get_cached_agent_verdict", "store_agent_verdict"]

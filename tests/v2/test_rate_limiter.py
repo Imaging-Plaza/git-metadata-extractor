@@ -10,10 +10,7 @@ from git_metadata_extractor.providers.rate_limiter import RateLimiter
 
 HTTP_OK = 200
 EXPECTED_RETRY_CALLS = 2
-EXPECTED_REMAINING_HIGH = 42
 EXPECTED_THROTTLE_DELAY = 0.5
-EXPECTED_GITHUB_REMAINING = 3
-EXPECTED_ROR_REMAINING = 30
 
 
 class _Response:
@@ -68,19 +65,7 @@ def test_rate_limiter_respects_retry_after_header() -> None:
     assert recorder.delays == [2.0]
 
 
-def test_rate_limiter_tracks_remaining_quota_per_provider() -> None:
-    limiter = RateLimiter(jitter_func=lambda: 0.0)
-    asyncio.run(
-        limiter.with_rate_limit(
-            "ror",
-            lambda: _Response(200, {"X-RateLimit-Remaining": "42"}),
-        ),
-    )
-
-    assert limiter.get_remaining("ror") == EXPECTED_REMAINING_HIGH
-
-
-def test_rate_limiter_throttles_when_remaining_quota_is_low() -> None:
+def test_rate_limiter_throttles_while_remaining_quota_is_low() -> None:
     recorder = _SleepRecorder()
     limiter = RateLimiter(
         low_remaining_threshold=10,
@@ -95,6 +80,13 @@ def test_rate_limiter_throttles_when_remaining_quota_is_low() -> None:
             lambda: _Response(200, {"X-RateLimit-Remaining": "5"}),
         ),
     )
+    # Throttled by the low quota above; this response reports it recovered.
+    asyncio.run(
+        limiter.with_rate_limit(
+            "github",
+            lambda: _Response(200, {"X-RateLimit-Remaining": "42"}),
+        ),
+    )
     asyncio.run(
         limiter.with_rate_limit(
             "github",
@@ -102,7 +94,7 @@ def test_rate_limiter_throttles_when_remaining_quota_is_low() -> None:
         ),
     )
 
-    assert any(delay == EXPECTED_THROTTLE_DELAY for delay in recorder.delays)
+    assert recorder.delays == [EXPECTED_THROTTLE_DELAY]
 
 
 def test_rate_limiter_raises_after_retry_budget_is_exhausted() -> None:
@@ -126,7 +118,13 @@ def test_rate_limiter_raises_after_retry_budget_is_exhausted() -> None:
 
 
 def test_rate_limit_tracking_is_isolated_by_provider() -> None:
-    limiter = RateLimiter(jitter_func=lambda: 0.0)
+    recorder = _SleepRecorder()
+    limiter = RateLimiter(
+        low_remaining_threshold=10,
+        near_limit_delay_seconds=0.5,
+        sleep_func=recorder,
+        jitter_func=lambda: 0.0,
+    )
     asyncio.run(
         limiter.with_rate_limit(
             "github",
@@ -139,9 +137,17 @@ def test_rate_limit_tracking_is_isolated_by_provider() -> None:
             lambda: _Response(200, {"X-RateLimit-Remaining": "30"}),
         ),
     )
+    # github's low quota does not slow down ror ...
+    assert recorder.delays == []
 
-    assert limiter.get_remaining("github") == EXPECTED_GITHUB_REMAINING
-    assert limiter.get_remaining("ror") == EXPECTED_ROR_REMAINING
+    asyncio.run(
+        limiter.with_rate_limit(
+            "github",
+            lambda: _Response(200),
+        ),
+    )
+    # ... and ror's healthy quota does not mask github's.
+    assert recorder.delays == [EXPECTED_THROTTLE_DELAY]
 
 
 def test_rate_limiter_supports_same_provider_across_multiple_event_loops() -> None:

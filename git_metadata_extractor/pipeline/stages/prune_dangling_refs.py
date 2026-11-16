@@ -17,7 +17,8 @@ the surviving entities can carry references to those excluded ids:
 
 This stage walks the assembled graph and, in two passes:
 
-1. Drops Memberships whose ``org:organization`` is dangling.
+1. Drops Memberships whose ``org:organization`` is dangling or which no live
+   Person references through ``org:hasMembership``.
 2. Drops Contributions whose ``pulse:contributionTo`` or ``schema:author``
    is dangling (we can't keep contribution data without a person+repo pair).
 3. After re-indexing, filters all collection-typed reference fields
@@ -181,6 +182,19 @@ def prune_dangling_refs(
     # Pass 1: drop Memberships and Contributions whose core refs are dangling
     # ------------------------------------------------------------------
     live = _live_ids(_candidates())
+    # Membership has no public person endpoint: its subject is the inverse
+    # Person -> org:hasMembership edge. Strict validation may exclude that
+    # Person while leaving the individually valid Membership behind. Such a
+    # node has no affiliation subject and would route into substrate #meta.
+    person_memberships: set[str] = set()
+    for candidate in _candidates():
+        if not isinstance(candidate, dict) or "schema:Person" not in _types_of(candidate):
+            continue
+        refs = candidate.get("org:hasMembership")
+        if isinstance(refs, list):
+            person_memberships.update(
+                target for ref in refs if (target := _resolve_id_ref(ref)) is not None
+            )
     surviving: list[Any] = []
     dropped_memberships = 0
     dropped_contribs = 0
@@ -201,6 +215,8 @@ def prune_dangling_refs(
                 membership_problems.append(
                     f"org:organization={org_ref!r} (dangling)",
                 )
+            if (entity.get("id") or entity.get("@id")) not in person_memberships:
+                membership_problems.append("org:hasMembership (no surviving Person subject)")
             if membership_problems:
                 dropped_memberships += 1
                 warnings.append(

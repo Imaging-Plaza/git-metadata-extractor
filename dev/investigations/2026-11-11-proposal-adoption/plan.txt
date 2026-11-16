@@ -1,0 +1,43 @@
+Scoped proposal adoption plan — 2026-11-11
+
+Baseline: feat/2026-11-refactor at 55461aa4409555beeee9481e54d767b0067906e2.
+Evidence source: 0908b07b379d0f0b51c2032f478aed94cd08ef46.
+Ontology: vendor/open-pulse-ontology at
+83074e9e41de6d813d7352b2ca9706c08f202098.
+
+1. Import only missing files under dev/v4.0.0, dev/ontology-v3-profiles
+   and dev/rete using Python subprocess git show bytes. Preserve the four
+   existing Robin-branch files. Record paths and content hashes in
+   import-manifest.json. Add archive notices to newly imported READMEs.
+2. Audit all 22 requests against the actual pinned TTL, generated models,
+   projection, substrate routing, validation and provenance implementation.
+   Record accepted alternatives and explicit deferrals in adoption.txt.
+3. Limit runtime work to source-aware raw projection: private normalized
+   substrate input retains source metadata; GitHub profile extras stay on
+   GitHub profiles; remove the unsupported ORCID biography fallback; stop
+   promoting primary programming language to natural-language pulse:language.
+   Reject bare Twitter handles as social-link IRIs and validate raw web links
+   through a reusable, Pydantic-backed web_iri transform.
+4. Defer every other proposed runtime addition, including externalReference
+   mappings, repository facts, new raw entity types and namespace normalization.
+   Do not loosen SHACL, import experimental terms into runtime contracts,
+   modify the ontology pin or run historical scripts.
+5. Verify runtime and packaged configuration, obtain independent review, then
+   append the changes to feat/2026-11-refactor and update the existing PR #171.
+
+Verification
+
+- Byte-compare each untouched imported artifact against git show at the
+  immutable evidence commit; compare the original README body after its notice.
+- Verify each preserved file against its pre-import SHA-256 manifest entry.
+- Inspect git status and diff --check; inventory exact imported paths.
+- Run focused raw projection/source attribution/substrate
+  and affected pipeline regressions, including no internal-field leakage,
+  source-specific profile extras, ORCID biography isolation and programming
+  language semantics. Run relevant mapping/contract validation checks.
+- Historical conversion-test results are evidence from their original
+  environment, not test results for this branch. Do not rerun archive scripts.
+
+Completion report must state files changed, behavior, actual commands and
+results, and remaining ontology/runtime follow-ups. This plan does not claim
+runtime tests passed; validation.txt records those results.

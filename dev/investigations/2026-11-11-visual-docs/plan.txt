@@ -1,0 +1,35 @@
+Visual documentation implementation plan
+
+Goal: add an offline animated visual guide and update documentation entrypoints.
+Spec: design.txt in this directory.
+Architecture: docs/guide/index.html + guide.css + guide.js; MkDocs copies these
+static assets. Markdown entrypoints link to the guide and searchable guides.
+Tech: native HTML, CSS, SVG, JavaScript; existing MkDocs.
+
+Global constraints: no external assets, secrets, runtime changes, or deployment.
+Keep source boundary and ontology/API versions accurate. Honor reduced motion,
+visible keyboard focus, meaningful SVG labels, and no-JS fallback content.
+
+Task 1: implement guide and docs integration in the existing isolated worktree.
+Read current services, mappings, pipeline and report contracts. Create visual
+guide with three C4 views and two animated sequences, runtime selection,
+source explanation and mapping/ontology recipes. Update docs/index.md,
+README introduction and mkdocs nav. Add a searchable maintenance guide.
+Verify syntax, internal links and strict docs build.
+
+Task 2: visual/interaction verification and independent review.
+Inspect 1440px and 390px screenshots; exercise every diagram/runtime control,
+play/pause/reset, reduced motion and no-JS. Fix any clipping or inaccurate
+claims. Review diff against current code. Record evidence in validation.txt.
+
+Review focus: offline assets; relative links under versioned MkDocs URLs;
+small-screen diagram readability; pause/reduced-motion behavior; distinction
+between actual deployment and conceptual C4 containers.
+
+Execution record
+Task 1 complete: guide and searchable docs integrated, current architecture
+verified against code. Existing isolated refactor worktree reused.
+Task 2 complete: strict build, syntax, links, desktop/mobile browser checks
+passed. Independent review found hidden text equivalents; fixed using native
+disclosures and verified the failing regression now passes with and without JS.
+Full evidence and remaining publication boundary are recorded in validation.txt.

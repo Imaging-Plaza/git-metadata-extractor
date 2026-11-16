@@ -43,13 +43,21 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from git_metadata_extractor.providers.ror_rag import RorRagProvider, build_default_provider
+from pydantic import Field
+
+from git_metadata_extractor.models import InternalModel
+from git_metadata_extractor.pipeline.stages.reconciliation import (
+    normalize_organization_identifiers,
+)
 from git_metadata_extractor.pipeline.stages.resolve_company_to_ror import (
     _resolve_one,
     _strip_country,
+)
+from git_metadata_extractor.providers.ror_rag import (
+    RorRagProvider,
+    build_default_provider,
 )
 
 if TYPE_CHECKING:
@@ -60,8 +68,7 @@ logger = logging.getLogger(__name__)
 STAGE_SOURCE_TAG = "resolve_placeholder_orgs_to_ror"
 
 
-@dataclass(slots=True)
-class PlaceholderResolutionResult:
+class PlaceholderResolutionResult(InternalModel):
     """Summary of one stage run."""
 
     placeholders_examined: int
@@ -69,7 +76,7 @@ class PlaceholderResolutionResult:
     memberships_rewritten: int
     queries_attempted: int
     queries_accepted: int
-    rejection_reasons: dict[str, int] = field(default_factory=dict)
+    rejection_reasons: dict[str, int] = Field(default_factory=dict)
 
 
 def _placeholder_orgs(reconciled: "ReconciledEntities") -> list[dict[str, Any]]:
@@ -103,11 +110,8 @@ def _rewrite_org_in_place(
     if not isinstance(identifiers, dict):
         identifiers = {}
     identifiers["pulse:ror"] = ror_id
-    # Drop the dangling uuid identifier — it's no longer the canonical
-    # id, and leaving it can confuse downstream consumers that look for
-    # `identifiers.uuid` as a fallback dedupe key.
-    identifiers.pop("uuid", None)
     org["identifiers"] = identifiers
+    normalize_organization_identifiers(org)
     # Prefer the canonical ROR display name when we have it; keep the
     # original placeholder string under `gme-internal:original_name`
     # so the breadcrumb is recoverable with `?include_internal_fields=true`.

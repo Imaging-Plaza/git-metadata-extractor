@@ -25,6 +25,8 @@ services:
       # removed). Required for repository extraction — unset → in-process gimie,
       # which is no longer installed (RuntimeError). Mirror this in prod.
       GIMIE_API_URL: ${GIMIE_API_URL:-http://gme-gimie-api:15400}
+      SOURCES_API_URL: http://gme-sources:8080
+      SOURCES_API_TOKEN: ${SOURCES_API_TOKEN:-${API_TOKEN:-}}
     ports:
       - "${SSH_PORT:-2222}:2222"
       - "${APP_PORT:-1234}:1234"
@@ -32,6 +34,26 @@ services:
     volumes:
       - ..:/workspaces/project:cached
     command: sleep infinity
+    networks:
+      - dev
+  gme-sources:
+    build:
+      context: ../dev/open-pulse-sources
+      dockerfile: tools/image/Dockerfile
+    image: open-pulse-sources:local
+    env_file:
+      - ../.env
+    environment:
+      API_TOKEN: ${SOURCES_API_TOKEN:-${API_TOKEN:-}}
+      INDEX_QDRANT_URL: http://gme-qdrant:6333
+      INDEX_DATA_DIR: /app/data/index
+      SELENIUM_REMOTE_URL: http://gme-selenium-firefox:4444
+      WORKERS: "1"
+    volumes:
+      - ../data/index:/app/data/index
+    depends_on:
+      - gme-qdrant
+    restart: unless-stopped
     networks:
       - dev
   gme-qdrant:

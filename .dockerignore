@@ -45,5 +45,5 @@ extraction_results/
 site/
 dev/
 .staging/
-# Sibling repo clone (has its own image); wheel is staged via opswheel/
+# Independent sources checkout (has its own image).
 open-pulse-sources/

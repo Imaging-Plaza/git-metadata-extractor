@@ -1,0 +1,12 @@
+schema_version: 1
+name: ror.organization
+version: '1'
+source_contract: ror.organization.record
+target_contract: agent.organization
+fields: {}
+internal_fields:
+  _ror_country: {sources: [country], empty: preserve, missing: 'null'}
+  _ror_types: {sources: [types], empty: preserve, missing: 'null'}
+  _ror_status: {sources: [status], empty: preserve, missing: 'null'}
+  _ror_established: {sources: [established], empty: preserve, missing: 'null'}
+  _ror_links: {sources: [links], empty: preserve, missing: 'null'}

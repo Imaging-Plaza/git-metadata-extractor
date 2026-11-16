@@ -75,10 +75,6 @@ from git_metadata_extractor.agents.llm.agent_tools.snsf_rag import (
 from git_metadata_extractor.agents.llm.agent_tools.swissubase_rag import (
     make_swissubase_rag_search_tool,
 )
-from git_metadata_extractor.agents.llm.agent_tools.uuid import (
-    generate_uuid_v4_batch_tool,
-    generate_uuid_v4_tool,
-)
 from git_metadata_extractor.agents.llm.agent_tools.oamonitor_rag import (
     make_oamonitor_rag_fetch_records_tool,
     make_oamonitor_rag_search_tool,
@@ -93,8 +89,6 @@ from git_metadata_extractor.agents.llm.agent_tools.github_rag import (
 
 __all__ = [
     "fetch_link_content_via_selenium_tool",
-    "generate_uuid_v4_batch_tool",
-    "generate_uuid_v4_tool",
     "hash_user_email",
     "hash_user_email_tool",
     "list_disciplines_tool",

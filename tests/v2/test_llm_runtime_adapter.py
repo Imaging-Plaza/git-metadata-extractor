@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass
 from typing import Any
 
 import pytest
@@ -12,13 +11,13 @@ from git_metadata_extractor.agents.llm.runtime import (
     LLMRuntimeResponseError,
     V2LLMRuntime,
 )
+from git_metadata_extractor.models import InternalModel
 
 EXPECTED_PROMPT_TOKENS = 17
 EXPECTED_COMPLETION_TOKENS = 23
 
 
-@dataclass
-class _FakeUsage:
+class _FakeUsage(InternalModel):
     input_tokens: int = 11
     output_tokens: int = 7
     requests: int = 3
@@ -26,8 +25,7 @@ class _FakeUsage:
     details: dict[str, int] | None = None
 
 
-@dataclass
-class _FakeResult:
+class _FakeResult(InternalModel):
     output: Any
     usage: Any = None
 

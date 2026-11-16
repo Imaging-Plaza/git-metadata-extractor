@@ -8,6 +8,8 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+from git_metadata_extractor.agents.tool_catalog import ToolContext, resolve_tools
+
 logger = logging.getLogger(__name__)
 
 from git_metadata_extractor.agents.llm._loader import load_prompt
@@ -16,45 +18,16 @@ from git_metadata_extractor.agents.llm._verdict_cache import (
     get_cached_agent_verdict,
     store_agent_verdict,
 )
-from git_metadata_extractor.agents.llm.agent_tools.email_hash import hash_user_email_tool
-from git_metadata_extractor.agents.llm.agent_tools.epfl_graph_rag import (
-    make_epfl_graph_rag_search_tool,
+from git_metadata_extractor.agents.llm.prompt_context import (
+    append_runtime_prompt_context,
 )
-from git_metadata_extractor.agents.llm.agent_tools.ethz_research_collection_rag import (
-    make_ethz_research_collection_rag_fetch_chunks_tool,
-    make_ethz_research_collection_rag_fetch_records_tool,
-    make_ethz_research_collection_rag_search_tool,
-)
-from git_metadata_extractor.agents.llm.agent_tools.infoscience_rag import (
-    make_infoscience_rag_fetch_chunks_tool,
-    make_infoscience_rag_fetch_records_tool,
-    make_infoscience_rag_search_tool,
-)
-from git_metadata_extractor.agents.llm.agent_tools.infoscience_search import (
-    make_infoscience_search_tool,
-)
-from git_metadata_extractor.agents.llm.agent_tools.orcid_person import make_orcid_person_tool
-from git_metadata_extractor.agents.llm.agent_tools.orcid_rag import (
-    make_orcid_rag_search_tool,
-)
-from git_metadata_extractor.agents.llm.agent_tools.query_orcid import make_query_orcid_tool
-from git_metadata_extractor.agents.llm.agent_tools.renkulab_rag import (
-    make_renkulab_rag_search_tool,
-)
-from git_metadata_extractor.agents.llm.agent_tools.selenium_fetch import (
-    make_fetch_link_content_tool,
-)
-from git_metadata_extractor.agents.llm.agent_tools.snsf_rag import (
-    make_snsf_rag_search_tool,
-)
-from git_metadata_extractor.agents.llm.prompt_context import append_runtime_prompt_context
 from git_metadata_extractor.agents.llm.runtime import (
     LLMRuntimeError,
     V2LLMRuntime,
 )
 from git_metadata_extractor.agents.models import AgentResult, ProviderSet, generate_uuid
-from git_metadata_extractor.providers.cache import ProviderCache
 from git_metadata_extractor.observation.query_log import stamp_current_agent
+from git_metadata_extractor.providers.cache import ProviderCache
 from git_metadata_extractor.schema.models.strict import PersonModel
 
 _PROMPTS_PACKAGE = "git_metadata_extractor.agents.llm.person.prompts"
@@ -380,49 +353,7 @@ class LLMPersonAgentV2:
         user_prompt = append_runtime_prompt_context(user_prompt, context)
 
         # Build provider-dependent tools only when providers are available.
-        tools = [make_fetch_link_content_tool(self._cache), hash_user_email_tool]
-        if providers.infoscience is not None:
-            tools.append(make_infoscience_search_tool(providers.infoscience))
-        if providers.orcid is not None:
-            tools.append(make_orcid_person_tool(providers.orcid))
-            tools.append(
-                make_query_orcid_tool(
-                    providers.orcid,
-                    orcid_rag_provider=providers.orcid_rag,
-                ),
-            )
-        if providers.infoscience_rag is not None:
-            tools.append(make_infoscience_rag_search_tool(providers.infoscience_rag))
-            tools.append(
-                make_infoscience_rag_fetch_chunks_tool(providers.infoscience_rag),
-            )
-            tools.append(
-                make_infoscience_rag_fetch_records_tool(providers.infoscience_rag),
-            )
-        if providers.ethz_research_collection_rag is not None:
-            tools.append(
-                make_ethz_research_collection_rag_search_tool(
-                    providers.ethz_research_collection_rag,
-                ),
-            )
-            tools.append(
-                make_ethz_research_collection_rag_fetch_chunks_tool(
-                    providers.ethz_research_collection_rag,
-                ),
-            )
-            tools.append(
-                make_ethz_research_collection_rag_fetch_records_tool(
-                    providers.ethz_research_collection_rag,
-                ),
-            )
-        if providers.orcid_rag is not None:
-            tools.append(make_orcid_rag_search_tool(providers.orcid_rag))
-        if providers.renkulab_rag is not None:
-            tools.append(make_renkulab_rag_search_tool(providers.renkulab_rag))
-        if providers.snsf_rag is not None:
-            tools.append(make_snsf_rag_search_tool(providers.snsf_rag))
-        if providers.epfl_graph_rag is not None:
-            tools.append(make_epfl_graph_rag_search_tool(providers.epfl_graph_rag))
+        tools = resolve_tools("person_agent", ToolContext(providers=providers, cache=self._cache, context=context))
 
         identifier = (
             github_username

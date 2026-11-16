@@ -1,0 +1,35 @@
+Shared tool catalog - design and implementation plan
+====================================================
+Goal: add tools once, compose them for agents, and benchmark toolset variants.
+Local work only; preserve existing provenance and pipeline-profile changes.
+
+Approaches: retain per-agent lists (simple but repeats every extension); add a
+shared Python catalog with validated YAML selections (chosen implementation);
+remote tool service/plugin discovery (unnecessary deployment/dependency scope).
+The catalog fits the existing provider factories and production Pydantic AI
+runtime without changing schemas, prompts, extraction sequencing or indices.
+
+1. Test and implement agents/tool_catalog.py: versioned factories, typed options,
+   provider requirements, reusable bundles, stable deduplication, duplicate model
+   tool-name rejection, task-local selection, extend/replace policy. Factories
+   build tools without fetching data. Optional defaults skip missing providers;
+   explicitly requested tools fail when requirements are missing.
+2. Move default tool wiring for six entity generators and context summary/scout
+   to agents/llm/tool_defaults.py. Preserve current names/order/availability.
+   Centralize infoscience/ETH search+fetch bundles and register all existing RAG
+   search tools. Add a bounded GitHub repository retrieval tool as an example
+   reusable across roles; never enable new tools by default.
+3. Add profile toolsets and catalog manifests. Include versions and selections
+   in fingerprints; scope overrides across the full extraction, restore on all
+   exits. Reject overrides in runtimes that do not execute those tool roles.
+   CLI list exposes tools/bundles/defaults; custom catalogs work via Python API.
+4. Validate default parity, custom tool invocation, concurrent isolation, schema
+   preservation/provenance, missing providers, duplicate names/options and cache
+   fingerprint changes. Run full deterministic Docker suite and scoped lint.
+5. Document registration, YAML selection and limits; retain a validation report.
+
+Limits: toolset replacement controls model tools, not deterministic prefetches or
+provider lookups elsewhere in the pipeline. Hybrid refiners/post-processing keep
+their own narrowly-scoped tool wiring. No new service or live model calls.
+Optimize maintainability and allow smaller toolsets; do not claim latency gains
+without live benchmark evidence. User authorization covers this local refactor.

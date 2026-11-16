@@ -1,0 +1,123 @@
+Agent and retrieval provenance
+==============================
+
+Local branch: feat/agent-evidence-provenance, based on Robin's 442e921.
+No pushes, deployment changes, secret-file edits or ontology schema edits.
+
+API
+---
+GET/POST /v2/extract results now include `provenance` beside `output`,
+`extraction_run` and (when enabled) `substrate`. It is a JSON-LD document,
+independent of the canonical entity graph and its closed shapes.
+
+Each final public property value has an rdf:Statement with:
+  rdf:subject          the final entity IRI
+  rdf:predicate        the property IRI
+  rdf:object           the final value
+  prov:wasGeneratedBy  the observed producing activity, when known
+  gme:evidenceKind     retrieved / model / llm / rule_based / refiner /
+                       transformation / cache_reuse / unattributed
+
+For LLM outputs, follow prov:wasGeneratedBy to the model call and
+prov:wasInformedBy to the named entity agent/refiner. Activities carry
+gme:model, gme:provider, status, start/end times, and prov:wasAssociatedWith.
+The model string is the configured model ID, not a verified weights revision.
+
+Retrieval activities carry gme:service, sanitized gme:arguments, gme:source
+record URLs, gme:status, gme:cache_hit and a response fingerprint. A successful
+empty query is recorded but cannot support a citation. Failed queries and
+tool-only query attempts remain visible as failed/attempted history.
+Provider calls and tools are separate boundaries; one tool can call several
+providers, and both levels appear. A successful cached provider read is not
+claimed to be a fresh network request.
+
+Evidence strength
+-----------------
+prov:wasDerivedFrom on an assertion means an agent explicitly cited a query
+and the server verified that the exact scalar value was present in its
+successful response. The runtime supplies list_source_evidence and cite_source
+tools and instructions to the LLM. This verifies presence, not semantic truth:
+the agent still chooses which retrieved record is relevant. Source URLs on a
+query may describe multiple returned records, not a unique field-level record.
+
+gme:matchingQuery is weaker: the value appeared in a successful query available
+to that agent, but there was no explicit citation. It is NOT a derivation edge.
+Rule-based output has these candidates without requiring an LLM. Values with
+no evidence remain labelled as generated/transformed/unattributed; the system
+does not guess a provider from the entity's GitHub/ORCID identity.
+
+Only queries in the active agent's scope or successful current-run context/scout
+activities are available for citation. Sibling agents and cached context from
+other runs cannot supply new citations. Context-summary evidence is shared
+because downstream agents receive the compiled summary.
+
+Hybrid refiners record their individual model calls and proposals. Only values
+that survive into final output produce exported assertions. Deterministic
+post-processing records its stage when introducing new values. Existing
+attribution survives unchanged values. A changed/renamed property can be
+attributed to the transformation rather than its earlier source; this version
+does not reconstruct arbitrary transformations or a full per-triple version
+history. Robin's existing platform routing and unifier selection rules remain
+independent of this evidence graph.
+
+Cache and privacy
+-----------------
+Agent verdicts preserve a scoped evidence packet with original run/query IDs,
+model metadata and timestamps. Reuse is a separate cache activity. Legacy
+verdicts without packets are marked cache_reuse, not freshly generated.
+Pipeline cache keys include evidence version and canonical/substrate flags.
+A full pipeline cache hit returns the original result and original provenance.
+
+The provenance document contains no model prompts or full provider bodies.
+Only hashes of candidate values are retained internally/in verdict packets.
+Credentials, URL credentials, sensitive query parameters and email search
+values are redacted from new provenance metadata. Only final public values
+become exported statements; dropped/internal fields are not exported.
+Source metadata is not a general-purpose PII anonymizer: public source URLs,
+names in queries, and final public graph values remain observable.
+
+Storage
+-------
+With V2_SUBSTRATE_ENABLED=true, the same provenance nodes are included in
+`urn:pulse:run:{run_id}#evidence`, an append-only named graph in the substrate.
+The existing V2_SUBSTRATE_STORE_URL controls Oxigraph persistence. Without a
+store, provenance is still returned in the API response. No second service
+or database is required.
+
+The `gme` vocabulary is an extractor extension:
+  https://open-pulse.epfl.ch/extractor/provenance#
+It is not added to, or claimed to be part of, the upstream ontology shapes.
+
+Example query (substitute the repository IRI):
+
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX prov: <http://www.w3.org/ns/prov#>
+PREFIX gme: <https://open-pulse.epfl.ch/extractor/provenance#>
+SELECT ?field ?value ?kind ?activity ?model ?query ?source WHERE {
+  GRAPH ?evidence {
+    ?assertion rdf:subject <https://github.com/sdsc-ordes/gimie> ;
+               rdf:predicate ?field ; rdf:object ?value ;
+               gme:evidenceKind ?kind .
+    OPTIONAL {
+      ?assertion prov:wasGeneratedBy ?activity .
+      OPTIONAL { ?activity gme:model ?model }
+    }
+    OPTIONAL {
+      ?assertion prov:wasDerivedFrom ?query .
+      ?query gme:source ?source .
+    }
+  }
+}
+
+Validation
+----------
+Offline tests exercise concurrent agents, checked and rejected citations,
+real Pydantic AI tool cycles (function model, no remote LLM), failed/empty
+retrievals, cache reuse, rejected retries, current vs historical scout context,
+ORCID/ROR/Infoscience payloads, privacy, RDF serialization, API responses and
+substrate transport. The deterministic tests/v2 suite runs in Docker with
+--network none. This change has not been benchmarked against a live LLM;
+citation coverage and extra model/tool cost depend on the selected model.
+
+Existing Robin deployment/unifier issues and the separate local article-agent
+fix are outside this change. No canonical unifier rebuild was triggered.

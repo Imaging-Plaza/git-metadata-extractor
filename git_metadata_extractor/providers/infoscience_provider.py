@@ -97,7 +97,11 @@ def _normalize_publication(publication: dict[str, Any]) -> InfosciencePublicatio
 
 
 class RealInfoscienceProvider(InfoscienceProvider):
-    """Production Infoscience provider wrapping existing context search utilities."""
+    """Production Infoscience provider wrapping existing context search utilities.
+
+    Search cache keys use v2 because older entries could encode upstream failures
+    as successful empty lists. Those entries cannot establish a genuine miss.
+    """
 
     def __init__(
         self,
@@ -170,7 +174,7 @@ class RealInfoscienceProvider(InfoscienceProvider):
             return _fetch()
         key = ProviderCache.make_key(
             "infoscience",
-            "search_person",
+            "search_person_v2",
             query=query,
             max_results=self._max_results,
         )
@@ -201,7 +205,7 @@ class RealInfoscienceProvider(InfoscienceProvider):
             return _fetch()
         key = ProviderCache.make_key(
             "infoscience",
-            "search_orgunit",
+            "search_orgunit_v2",
             query=query,
             max_results=self._max_results,
         )
@@ -226,7 +230,7 @@ class RealInfoscienceProvider(InfoscienceProvider):
             return _fetch()
         key = ProviderCache.make_key(
             "infoscience",
-            "search_publications",
+            "search_publications_v2",
             query=query,
             max_results=self._max_results,
         )

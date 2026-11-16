@@ -3,3 +3,10 @@
 !*.ttl
 !a-001/
 !a-001/**
+
+# The negations above re-include everything under a-001/, which overrides the
+# root .gitignore's __pycache__/ and *.py[cod] rules — a deeper .gitignore
+# wins over a shallower one. Re-exclude the bytecode here, after the negation,
+# so the last matching pattern is this one.
+__pycache__/
+*.py[cod]

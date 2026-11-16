@@ -2,8 +2,9 @@
 
 > **Repo split (2026-07-02):** the RAG index layer now lives in
 > [open-pulse-sources](https://github.com/sdsc-ordes/open-pulse-sources).
-> Index ops commands below run from that repo (same `data/index/` volume);
-> the `open_pulse_sources.*` modules come from its installed library.
+> Index operations below run inside that repository/service, which owns the
+> `data/index/` volume. The extractor now uses HTTP only; see the current
+> [service contract](cross-repo-contract.md) for local builds and deployment.
 
 Operational notes for running the v3.0.0 (`develop`) build of the
 git-metadata-extractor against the Open Pulse index/RAG stores. Captures the

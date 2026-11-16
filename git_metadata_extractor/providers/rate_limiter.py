@@ -4,10 +4,10 @@ import asyncio
 import logging
 import random
 import time
-from dataclasses import dataclass
 from email.utils import parsedate_to_datetime
 from typing import Any, Awaitable, Callable, TypeVar
 
+from git_metadata_extractor.models import InternalModel
 from git_metadata_extractor.providers.base import ProviderRateLimitError
 
 ResponseT = TypeVar("ResponseT")
@@ -17,8 +17,7 @@ LOGGER = logging.getLogger(__name__)
 HTTP_RATE_LIMIT = 429
 
 
-@dataclass(slots=True)
-class _ProviderRateLimitState:
+class _ProviderRateLimitState(InternalModel):
     remaining: int | None = None
     reset_epoch: float | None = None
     next_allowed_at: float = 0.0
@@ -47,9 +46,6 @@ class RateLimiter:
         # asyncio.Lock instances are bound to the loop where they are created.
         # Keep separate locks per provider+loop to avoid cross-loop binding errors.
         self._locks: dict[tuple[str, int], asyncio.Lock] = {}
-
-    def get_remaining(self, provider_name: str) -> int | None:
-        return self._state(provider_name).remaining
 
     async def with_rate_limit(
         self,

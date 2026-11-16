@@ -1,0 +1,224 @@
+{
+  "source_commit": "0908b07b379d0f0b51c2032f478aed94cd08ef46",
+  "files": [
+    {
+      "path": "dev/ontology-v3-profiles/README.md",
+      "action": "imported",
+      "source_sha256": "cc1a4646dd7d70e2ed56f891225276e8adf2a8e6de9a41735c445b6dadee9a8d",
+      "normalization": "rstrip line whitespace and final blank lines",
+      "imported_sha256": "5161457ea8c5f1837ddae82bcd88b10d2690023e1c230addb274d9b79dbdff8a"
+    },
+    {
+      "path": "dev/ontology-v3-profiles/dependencies-and-dependents.md",
+      "action": "preserved-existing",
+      "sha256": "b1abd4e6c53c1c1d5450d55a7d8596ce0c2a7874fecd4b9b72501cfa5e0ab106"
+    },
+    {
+      "path": "dev/ontology-v3-profiles/field-mapping.md",
+      "action": "imported",
+      "source_sha256": "ed6ab46ab8d693fb0219b1580a057b7a13d4ddfcf591e13b9ff68b8fadf214e3"
+    },
+    {
+      "path": "dev/rete/README.md",
+      "action": "imported",
+      "source_sha256": "7e500da5430ab5689cb08cf6709370e2f7716323bb6c41de0f8c75bbcac767b4"
+    },
+    {
+      "path": "dev/rete/epfl-infoscience.ttl",
+      "action": "imported",
+      "source_sha256": "8c003faf65f57a8972f0656c28911b3d4e582b1848bf388965328e025d0514b9"
+    },
+    {
+      "path": "dev/rete/gme-alignment-findings.md",
+      "action": "imported",
+      "source_sha256": "5b97f0e917f37e6050fb4d2ac548bf66d62a7b47e4f9471f295a78cd494c958c"
+    },
+    {
+      "path": "dev/rete/graphplaza-catalogue.md",
+      "action": "imported",
+      "source_sha256": "8bbbace4e2829f245335e70619c0e1d18e11b2bd164c315739244c0730b756dc",
+      "normalization": "rstrip line whitespace and final blank lines",
+      "imported_sha256": "a9bb10adf37ba1603267f3b62f84d8855c30a562506e955e4ccf249aebb7306b"
+    },
+    {
+      "path": "dev/rete/scholar.ttl",
+      "action": "imported",
+      "source_sha256": "6519fefaa0c83157726bce2a44b455a02c12c2625ab866c1aa385f5b8e144ce0"
+    },
+    {
+      "path": "dev/v4.0.0/README.md",
+      "action": "imported",
+      "source_sha256": "12283a66cde59221c1c9761500790c4df71ea51bf373efccd5f1ca219ad678e8"
+    },
+    {
+      "path": "dev/v4.0.0/build_explorer.py",
+      "action": "imported",
+      "source_sha256": "bf58fb93f6d5342e2e2f9134cc2c136dfa106cd2dded0c4344729f81fdbba61b"
+    },
+    {
+      "path": "dev/v4.0.0/build_instance_ecosystem.py",
+      "action": "imported",
+      "source_sha256": "392883d41df4a7fd8dd777632d566185b65050c431ea037edd6c201707ad97be"
+    },
+    {
+      "path": "dev/v4.0.0/build_instance_example.py",
+      "action": "imported",
+      "source_sha256": "3a5aec6ae47cf38eb1be047401114750f9e3d683606b271769071c4384733ad4"
+    },
+    {
+      "path": "dev/v4.0.0/build_instance_funding.py",
+      "action": "imported",
+      "source_sha256": "8b2e52a455c58eb057446162228e5d8e072bbde35d0437c38bd76f3f825e6949"
+    },
+    {
+      "path": "dev/v4.0.0/build_instance_multisource.py",
+      "action": "imported",
+      "source_sha256": "77a9b77a3d7fea528777224c594548ff899652df454decd932dc5d526c061aba"
+    },
+    {
+      "path": "dev/v4.0.0/conversion-test.md",
+      "action": "imported",
+      "source_sha256": "c1dc4354eb6f56740722483c355051662498a8fc62d144908376faae138512c2"
+    },
+    {
+      "path": "dev/v4.0.0/examples/gimie-raw-instance.ttl",
+      "action": "imported",
+      "source_sha256": "05db1c220ad34094e03401684ec84409e7ab8f5b23d3461ab6c137ff318a2c21"
+    },
+    {
+      "path": "dev/v4.0.0/examples/multi-identity-contribution.ttl",
+      "action": "imported",
+      "source_sha256": "fadc5e3bf7e1784ac5408a83ba32cb6db179effc99f622c033ebc78c162c3820"
+    },
+    {
+      "path": "dev/v4.0.0/examples/multi-identity-under-current-canonical.ttl",
+      "action": "imported",
+      "source_sha256": "2fa8c0581686262b22e9ba997daf3c46ea763318c16040520f1c0ade6521488c"
+    },
+    {
+      "path": "dev/v4.0.0/examples/sources/cordis_openaire.json",
+      "action": "imported",
+      "source_sha256": "46a04c53feb01d77073054b87d010f6828810e13451b0ea994fce665277ebeac"
+    },
+    {
+      "path": "dev/v4.0.0/examples/sources/cordis_search.json",
+      "action": "imported",
+      "source_sha256": "69ee73f87927bdf1c2b4b1224deeae7fca317218716553b9fb047eba165c5efa"
+    },
+    {
+      "path": "dev/v4.0.0/examples/sources/depsdev_pypi_gimie.json",
+      "action": "imported",
+      "source_sha256": "1348121a5b960c588ed79b0b6f6c7297048b1d970d58bd397a9f94ab3fe1775a"
+    },
+    {
+      "path": "dev/v4.0.0/examples/sources/depsdev_pypi_gimie_deps.json",
+      "action": "imported",
+      "source_sha256": "e81252857e99461087d31a89b3dd254ba3947ec2ee19cfd41e1ddb0f09dd9854"
+    },
+    {
+      "path": "dev/v4.0.0/examples/sources/depsdev_pypi_gimie_v040.json",
+      "action": "imported",
+      "source_sha256": "571f8f1a31350a17b5d36b8716e2d15cc70db1f966b43c0708508542e446b335"
+    },
+    {
+      "path": "dev/v4.0.0/examples/sources/dockerhub_sdsc.json",
+      "action": "imported",
+      "source_sha256": "da1f806497cd4a2a1264984a7e843ee86cc13cff6c9c478e63b8b532f7c5d3de"
+    },
+    {
+      "path": "dev/v4.0.0/examples/sources/ecosystems_pkg_gimie.json",
+      "action": "imported",
+      "source_sha256": "a2e954e959027b05a07664c61bb0d6463ffdea85394ac0ae12add8328a59210f"
+    },
+    {
+      "path": "dev/v4.0.0/examples/sources/ecosystems_repo_gimie.json",
+      "action": "imported",
+      "source_sha256": "016401124b156bd3680e3fbd8005838db740fe0b2ca6ec152179107340236aee"
+    },
+    {
+      "path": "dev/v4.0.0/examples/sources/hf_models_sdsc.json",
+      "action": "imported",
+      "source_sha256": "1bd759c47efb050f3f72293d69e66bf409993b9f11e626351c1906056028709c"
+    },
+    {
+      "path": "dev/v4.0.0/examples/sources/openalex_epfl.json",
+      "action": "imported",
+      "source_sha256": "d7f4cd902542e296c7b4b8135d11847ff09b4d18cc85b77ad3dfe85abe3d1b72"
+    },
+    {
+      "path": "dev/v4.0.0/explorer_template.html",
+      "action": "imported",
+      "source_sha256": "7f3e643698c803309527375cb968b0cb95745d4b148151976a8dc42e8db6c90d"
+    },
+    {
+      "path": "dev/v4.0.0/fetch_live_sources.py",
+      "action": "imported",
+      "source_sha256": "08003bfbf4932d8f8dcb7016cdc5e1b035ac994f02fd00e8156f1754da21ccbd"
+    },
+    {
+      "path": "dev/v4.0.0/git-author-identities.md",
+      "action": "imported",
+      "source_sha256": "e55b16454cbc417e85f12124d71530343f47b7115f6b093965ac5cc4d4cfac2d"
+    },
+    {
+      "path": "dev/v4.0.0/materialize_proposed_raw.py",
+      "action": "imported",
+      "source_sha256": "21c481514d8a02bf4fd5136c81af298ee8f6971d970c00f169e2965624d34027"
+    },
+    {
+      "path": "dev/v4.0.0/ontology-explorer.html",
+      "action": "imported",
+      "source_sha256": "9604ffec66319522eb1e834769d75e87f37f9f68b2eff0363522d6a373a228f4"
+    },
+    {
+      "path": "dev/v4.0.0/ontology-shapes-raw.additions.ttl",
+      "action": "imported",
+      "source_sha256": "181fb9f653410e35e982ca152daed96daef7f0453b0561ea939df901db778b32"
+    },
+    {
+      "path": "dev/v4.0.0/ontology.ttl",
+      "action": "imported",
+      "source_sha256": "f47b2a110cfa98fcc8a5ea0e0b473f9325acd27548303f692938fc33b0802eb3"
+    },
+    {
+      "path": "dev/v4.0.0/platform-fields.md",
+      "action": "preserved-existing",
+      "sha256": "803fe79f0fa0d476cd41f41faa6ab4d291504e1365e3d73925acac0c9ed8cb4f"
+    },
+    {
+      "path": "dev/v4.0.0/platform_inventory.py",
+      "action": "preserved-existing",
+      "sha256": "64ac9d7a58f62f0bf80b7f4b258853e7698a8479ff0b6dc4fda6ec2ce0b1f82c"
+    },
+    {
+      "path": "dev/v4.0.0/proposed/ontology-definitions-raw.proposed.ttl",
+      "action": "imported",
+      "source_sha256": "9c3d264de99eec6672fff696837524acff3ea535ee8b87fdc4c32a11d7ddbf65"
+    },
+    {
+      "path": "dev/v4.0.0/proposed/ontology-enumerations-raw.proposed.ttl",
+      "action": "imported",
+      "source_sha256": "c2f4c1f82a20205f27c194f4c38262c1d326d6ef17e3ae668524384df2191b86"
+    },
+    {
+      "path": "dev/v4.0.0/proposed/ontology-shapes-raw.proposed.ttl",
+      "action": "imported",
+      "source_sha256": "8384b7db9c8a8e5621ab84b510c39d7855ef17c81732427709cb1dd8c858047d"
+    },
+    {
+      "path": "dev/v4.0.0/raw-source-coverage.md",
+      "action": "imported",
+      "source_sha256": "184bbe3b7fd609930a86c207c5f28a70ed92432a80374665144ee8781ec325ba"
+    },
+    {
+      "path": "dev/v4.0.0/verification.md",
+      "action": "imported",
+      "source_sha256": "9f1b17281ebe54999c4667828723f174540add105d3d3914d6abd5c05c2d94aa"
+    },
+    {
+      "path": "dev/v4.0.0/verify_iris.py",
+      "action": "preserved-existing",
+      "sha256": "a50e75cb018985d8142c39a26fb7b00b12e8739bc5567c4c50ca461d0b1f0203"
+    }
+  ]
+}

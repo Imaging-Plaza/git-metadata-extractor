@@ -1,0 +1,43 @@
+Optional run report implementation plan
+
+Goal: expose an opt-in accurate report without changing extracted graphs.
+Spec: design.txt in this directory.
+Architecture: request-local collector + existing evidence + typed API sibling.
+Tech stack: Python, Pydantic, FastAPI, ContextVar, existing pytest/Docker tools.
+
+Global constraints
+- Existing feat/2026-11-refactor worktree; no secrets/dependencies/ontology edits.
+- Preserve default response and cache semantics; do not rerun for report toggles.
+- Use actual observations, never synthetic completed-stage summaries.
+- No raw values/prompts/arguments/exception text in the report.
+
+Tasks and ownership
+1. Observation module and contracts (implementation agent): add
+   observation/run_report.py plus run_report_models.py if useful; implement the
+   exact interfaces in design.txt and focused tests/v2/test_run_report.py.
+   Write tests, show failure, implement, verify; no commits from agents.
+2. Pipeline instrumentation (implementation agent): orchestrator.py, runner.py,
+   run.py validation hooks and tests/v2/test_run_report_pipeline.py. Observe
+   actual stages without changing execution/citation scopes. Tests first.
+3. Service and API integration (root): ExtractionOptions, contracts/errors,
+   extraction adapters, report cache treatment, tests for GET/POST/service/error
+   paths. Document request examples and correct stale runtime descriptions.
+4. Integrate, independently review, run focused and full verification, record
+   results, commit/push to existing branch and update PR #171.
+
+Review focus
+- Opt-out does not call snapshot functions or serialize a report.
+- Cache hits never claim current execution/cost from historical evidence.
+- Failure/skipped/conformance semantics survive actual pipeline boundaries.
+- Concurrent requests cannot share stages, evidence or runtime identities.
+- Reports redact credentials and avoid raw payload/exception values.
+
+Progress ledger
+- Design and interfaces grounded in current service, orchestrator, runner and
+  EvidenceTrace. Integration builds on the existing authorized report proposal.
+- Collector, pipeline instrumentation, GET/POST/service/local-profile integration
+  and documentation implemented. Independent review found one outcome-accuracy
+  gap for structured fail-open counters; corrected and re-reviewed with no
+  remaining blockers. Final full offline suite: 2,006 passed, one skipped.
+- Validation evidence is recorded in validation.txt. Integration follows the
+  existing authorized branch and PR; no deployment or service changes.

@@ -1,0 +1,49 @@
+Extensible pipeline profiles and local benchmarks
+
+Goal: define alternative acquisition pipelines and entity agents, and compare
+their full extraction output without changing central dispatch for every variant.
+Build on the existing provenance work in the current linked worktree; no pushes.
+
+Design
+  Keep the current entity contracts, fan-out orchestrator and post-agent chains.
+  Introduce a versioned component catalog: collectors and agent factories.
+  Validated YAML profiles select ordered collectors, agent implementations and
+  per-agent options, logical stages, runtime, concurrency, retries and model.
+  Collector output is a ContextBundle; subsequent collectors receive the merged
+  context. Agent callables keep the existing context/providers -> AgentResult seam.
+  Profiles refer to registered names, never arbitrary imports from YAML.
+  A local runner adapts profiles into the existing extraction engine, so graph
+  validation, privacy and provenance stay identical to serving behavior.
+  A benchmark CLI executes a corpus/profile/repeat matrix in isolated cache
+  directories and retains results, manifests and metrics. Cold is the default;
+  warm-pipeline trials are explicitly primed and labelled. No process-wide env
+  mutation. Model overrides use the existing opt-in and task-local scope.
+
+Alternatives considered
+  Replacing both sequencers with a generic DAG engine would greatly expand this
+  migration. Environment-only presets would leave component dispatch hard-coded.
+  Named components and profiles provide an incremental extension seam with an
+  end-to-end benchmark while keeping current behavior as the default adapter.
+
+Implementation plan (inline)
+1. RED: registry overrides work for LLM as well as rule-based; unknown runtime
+   bindings fail. GREEN: dictionary dispatch with backward-compatible adapters.
+2. RED: profile validation, collector composition, custom agent binding, stage
+   ordering, secret-free model config and stable component-version fingerprints.
+   GREEN: experiments/{models,catalog,builtins}.py and optional orchestrator plan.
+3. RED: profiles drive full extraction, cache separation, nested model override
+   restoration, provenance model-use metrics. GREEN: experiments/execution.py,
+   API execution_profile metadata and scoped cache identity.
+4. RED: corpus matrix, failed trial retention, cold/warm labels, actual token-use
+   accounting, expected-fact recall and missing-validation handling. GREEN:
+   experiments/{benchmark,__main__}.py, YAML examples and just recipes.
+5. Run a local mock-provider benchmark through the real pipeline. Run focused and
+   full deterministic Docker tests, scoped lint, diff check and independent review.
+
+Limits stated up front
+  Existing post-agent chains remain the default, not arbitrarily reorderable.
+  Profiles initially target the existing GitHub repository/user/org input kinds.
+  Live provider data is not frozen: manifests label live vs mock, and data drift
+  remains a confounder. A strict record/replay backend is a separate extension.
+  Expected-fact recall evaluates supplied facts, not overall precision/truth.
+  No live LLM spending for validation; deterministic function models suffice.

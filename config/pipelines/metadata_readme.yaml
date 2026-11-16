@@ -1,0 +1,8 @@
+schema_version: 1
+name: metadata-readme
+version: '1'
+runtime: rule_based
+collectors:
+  - component: github.repository_metadata
+  - component: github.readme
+max_concurrent_agents: 2

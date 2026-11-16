@@ -1,0 +1,45 @@
+name: Sources HTTP and MCP contracts
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  paired-services:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Test safe sources bootstrap
+        run: python -m unittest discover -s tests/dev -v
+
+      - name: Fetch the pinned sources service
+        # Fails until the paired commit is published; never falls back to main.
+        run: python scripts/dev/sources_checkout.py
+
+      - name: Install cross-repository test dependencies
+        # Only this test environment installs both packages. Production images
+        # and the ordinary extractor test job remain independent.
+        run: python -m pip install -e ".[dev]" -e dev/open-pulse-sources
+
+      - name: Verify contract dependencies are present
+        # Prevent pytest.importorskip from producing a false green CI result.
+        run: python -c "import open_pulse_sources.service.retrieval; import open_pulse_sources.mcp_server.server"
+
+      - name: Run cross-repository HTTP and MCP contracts
+        run: python -m pytest tests/contracts/ -q --no-cov
+
+      - name: Build production images
+        run: |
+          docker build -t git-metadata-extractor:local -f tools/image/Dockerfile .
+          docker build -t open-pulse-sources:local -f dev/open-pulse-sources/tools/image/Dockerfile dev/open-pulse-sources
+
+      - name: Exercise isolated HTTP and MCP services
+        run: python scripts/dev/smoke_sources.py

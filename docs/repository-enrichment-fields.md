@@ -1,7 +1,15 @@
 # Repository enrichment fields (`gme-internal:*`)
 
+This is a guide to collected metadata, not a mapping specification. Field
+assignments live in the packaged YAML: `github/repository.yaml` reads GitHub
+fields, `agent/repository.yaml` builds the prepared agent payload, and `raw/`
+and `canonical/` map the intermediate into their respective ontology shapes.
+See the [mapping overview](architecture/overview.md#source-to-ontology-mappings)
+and its editing guide before changing those assignments. Some metadata listed
+here has a raw ontology property even when the canonical layer omits it.
+
 The v2 repository pipeline collects a broad layer of provider metadata that the
-Open Pulse ontology does not (yet) model. These surface under the auxiliary
+flat v2 output exposes under the auxiliary
 `gme-internal:` JSON-LD vocabulary
 (`https://openpulse.science/git-metadata-extractor#`).
 

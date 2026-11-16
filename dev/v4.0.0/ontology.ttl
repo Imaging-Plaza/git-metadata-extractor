@@ -1,0 +1,1769 @@
+# =========================================================================
+# PROPOSAL — terms git-metadata-extractor would like promoted from
+# `gme-internal:` into the Open Pulse ontology proper.
+#
+# Status:      proposal, not published. Nothing here is emitted yet.
+# Against:     sdsc-ordes/open-pulse-ontology @ feature/platform-profiles (PR #25)
+# From:        Imaging-Plaza/git-metadata-extractor @ 3.0.0
+# Date:        2026-07-30
+# Rationale:   dev/ontology-v3-profiles/README.md (feasibility assessment)
+#              dev/ontology-v3-profiles/field-mapping.md (two-way field diff)
+#              dev/ontology-v3-profiles/dependencies-and-dependents.md
+#
+# WHY THIS FILE EXISTS
+#
+# GME extracts ~120 fields that the ontology has no term for. They are
+# currently emitted as `gme-internal:*` (namespace
+# https://openpulse.science/git-metadata-extractor#) and only when a caller
+# passes `?include_internal_fields=true` — so by default this data is
+# collected, validated, cached... and then dropped. Every term below is
+# data we already have in production today, not data we would like to go
+# and fetch.
+#
+# The `gme:mapsFrom` annotation on each term names the GME field it would
+# replace. Adopting a term means that field stops being `gme-internal:`
+# and becomes first-class. That annotation is OURS — it documents
+# provenance of the proposal and is not itself proposed for adoption.
+#
+# HOW TO READ IT
+#
+#   Section 1  blocks a term already in PR #25 (pulse:dependsOn) — highest priority
+#   Section 2-7  new terms, ordered by how much extraction they strand
+#   Section 8  enumeration members (cheapest possible change)
+#   Section 9  git identities — the current shapes block a use case outright
+#              (gitAuthorName/Email are maxCount 1; a person has many)
+#   Section 10 SHACL fragments showing where these attach
+#
+# Where an existing vocabulary already covers a need we say so and do NOT
+# propose a new term (see Section 6, name variants).
+# =========================================================================
+
+@prefix sh:       <http://www.w3.org/ns/shacl#> .
+@prefix xsd:      <http://www.w3.org/2001/XMLSchema#> .
+@prefix schema:   <http://schema.org/> .
+@prefix rdfs:     <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix rdf:      <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix org:      <http://www.w3.org/ns/org#> .
+@prefix owl:      <http://www.w3.org/2002/07/owl#> .
+@prefix skos:     <http://www.w3.org/2004/02/skos/core#> .
+@prefix pulse:    <https://open-pulse.epfl.ch/ontology#> .
+@prefix gme:      <https://openpulse.science/git-metadata-extractor#> .
+# Section 13 alignment targets. cito:/fabio:/frapo: IRIs taken from
+# dev/rete/scholar.ttl, which documents correcting frapo: away from the
+# non-existent purl.org/spar/frapo/.
+@prefix dct:      <http://purl.org/dc/terms/> .
+@prefix cito:     <http://purl.org/spar/cito/> .
+@prefix fabio:    <http://purl.org/spar/fabio/> .
+@prefix frapo:    <http://purl.org/cerif/frapo/> .
+# §20 alignment targets, both verified from their published ontology files.
+@prefix vivo:     <http://vivoweb.org/ontology/core#> .
+# Verified 2026-08-07 (see verification.md): spdx is the 2.3 ontology
+# (versionIRI http://spdx.org/rdf/terms/2.3); codemeta's own terms live at
+# codemeta.github.io/terms/, per the live @context at w3id.org/codemeta/3.0.
+@prefix spdx:     <http://spdx.org/rdf/terms#> .
+@prefix codemeta: <https://codemeta.github.io/terms/> .
+# §19: the deps.dev graph, verified live at
+# https://data.graphplaza.com/deps-dev/deps-dev-pypi.rete
+@prefix deps:     <https://w3id.org/rete/deps-dev#> .
+# §20: the rete scholarly hub's project/grant dimension.
+@prefix foaf:     <http://xmlns.com/foaf/0.1/> .
+@prefix scholar:  <https://w3id.org/rete/scholar#> .
+
+# The annotation property carrying proposal provenance. Not for adoption.
+gme:mapsFrom
+    a rdf:Property ;
+    skos:prefLabel "maps from" ;
+    skos:definition "The git-metadata-extractor internal field (a `_`-prefixed pipeline field, emitted as `gme-internal:*`) that this proposed term would replace." .
+
+
+# =========================================================================
+# 1. PACKAGES AND RELEASES
+#
+# This is the one that blocks a term you have already added.
+# `pulse:dependsOn` is typed schema:SoftwareSourceCode -> schema:SoftwareSourceCode,
+# but dependency data comes from GitHub's dependency-graph SBOM as PACKAGE
+# coordinates: pypi:requests@2.31, maven:org.apache.commons:commons-lang3.
+# There is no lossless way to emit dependsOn from that:
+#   - many packages have no public repository, and the SBOM does not carry one;
+#   - resolution costs one registry lookup per dependency;
+#   - "depends on pypi:requests@2.31" is a statement about a released artifact
+#     at a version — collapsing it to a repository IRI discards the version and
+#     asserts something weaker.
+# Your own definitions already hint at this: dependencyCount and dependentCount
+# both say "packages", while the edge is typed repository-to-repository.
+#
+# A Package node also gives four other stranded GME fields a home and unblocks
+# the npm / PyPI / Maven / NuGet / Go / crates / RubyGems indexers we have
+# designs for.
+# =========================================================================
+
+pulse:Package
+    a rdfs:Class ;
+    skos:prefLabel "Package" ;
+    skos:definition "A distributable artifact released to a package registry (e.g. a PyPI distribution, an npm package, a Maven artifact, a Conda package). Distinct from the repository whose source produced it: one repository may publish several packages, and a package may outlive or predate its repository." ;
+    gme:mapsFrom "_maven_group_id", "_maven_artifact_id", "_conda_channel", "_latest_version" .
+
+pulse:packageIdentifier
+    a rdf:Property ;
+    rdfs:subPropertyOf schema:identifier ;
+    rdfs:domain pulse:Package ;
+    skos:prefLabel "package identifier" ;
+    skos:definition "The package's canonical coordinate, preferably as a Package URL (purl), e.g. 'pkg:pypi/requests@2.31.0'. purl is chosen because it is the coordinate scheme SPDX SBOMs and GitHub's dependency graph already emit, so no translation is required." .
+
+pulse:packageEcosystem
+    a rdf:Property ;
+    rdfs:domain pulse:Package ;
+    rdfs:range pulse:PackageEcosystemEnumeration ;
+    skos:prefLabel "package ecosystem" ;
+    skos:definition "The registry ecosystem this package belongs to (pypi, npm, cargo, maven, ...). Values follow purl type conventions." .
+
+pulse:packageVersion
+    a rdf:Property ;
+    rdfs:domain pulse:Package ;
+    skos:prefLabel "package version" ;
+    skos:definition "The version string of this specific released package. Kept distinct from pulse:version (a record/release label) because a package version is registry-scoped and comparable within its ecosystem's ordering rules." ;
+    gme:mapsFrom "_latest_version" .
+
+pulse:packageRegistry
+    a rdf:Property ;
+    rdfs:domain pulse:Package ;
+    skos:prefLabel "package registry" ;
+    skos:definition "The registry or channel the package is published to, when the ecosystem alone is not sufficient to locate it (e.g. a Conda channel such as 'conda-forge', or a private index)." ;
+    gme:mapsFrom "_conda_channel" .
+
+pulse:distributedAs
+    a rdf:Property ;
+    rdfs:domain schema:SoftwareSourceCode ;
+    rdfs:range pulse:Package ;
+    owl:inverseOf pulse:sourceRepository ;
+    skos:prefLabel "distributed as" ;
+    skos:definition "Links a repository to a Package released from its source. This is the edge that answers 'how do I install this?', which repository metadata alone cannot." .
+
+pulse:sourceRepository
+    a rdf:Property ;
+    rdfs:domain pulse:Package ;
+    rdfs:range schema:SoftwareSourceCode ;
+    skos:prefLabel "source repository" ;
+    skos:definition "Links a Package back to the repository whose source produced it, when known." .
+
+pulse:dependsOnPackage
+    a rdf:Property ;
+    rdfs:domain schema:SoftwareSourceCode ;
+    rdfs:range pulse:Package ;
+    owl:inverseOf pulse:packageDependencyOf ;
+    skos:prefLabel "depends on package" ;
+    skos:definition "Links a repository to a Package it depends on, at the coordinate and version the manifest actually declares. This is the lossless form of the dependency edge; pulse:dependsOn (repository to repository) remains correct for vendored or submoduled source dependencies." ;
+    rdfs:comment "Alternative, if you would rather not add a second property: widen pulse:dependsOn's range to the union of schema:SoftwareSourceCode and pulse:Package. We have no preference between the two shapes — only that package-shaped dependencies be expressible." .
+
+pulse:packageDependencyOf
+    a rdf:Property ;
+    rdfs:domain pulse:Package ;
+    rdfs:range schema:SoftwareSourceCode ;
+    skos:prefLabel "package dependency of" ;
+    skos:definition "Links a Package to a repository that depends on it." .
+
+
+# =========================================================================
+# 2. CONTAINER ARTIFACTS AND DEPLOYMENT TOPOLOGY
+#
+# GME parses every docker-compose file in a repository (services, images,
+# with ${VAR:-default} resolution) and resolves image references to their
+# registry pages. Currently all of it is gme-internal:. pulse:externalReference
+# is the closest existing term and it is a bare link, so the service/image
+# structure is lost.
+#
+# Note DockerHub is also absent from PlatformEnumeration (Section 8) while
+# open-pulse-sources maintains a dockerhub index.
+# =========================================================================
+
+pulse:ContainerImage
+    a rdfs:Class ;
+    skos:prefLabel "Container Image" ;
+    skos:definition "A container image referenced or published by a repository, identified by its registry reference (e.g. 'ghcr.io/sdsc-ordes/open-pulse-sources:0.1.2' or a @sha256 digest)." ;
+    gme:mapsFrom "_container_images", "_compose_images" .
+
+pulse:publishesImage
+    a rdf:Property ;
+    rdfs:domain schema:SoftwareSourceCode ;
+    rdfs:range pulse:ContainerImage ;
+    skos:prefLabel "publishes image" ;
+    skos:definition "Links a repository to a container image it publishes." ;
+    gme:mapsFrom "_docker_hub_url" .
+
+pulse:referencesImage
+    a rdf:Property ;
+    rdfs:domain schema:SoftwareSourceCode ;
+    rdfs:range pulse:ContainerImage ;
+    skos:prefLabel "references image" ;
+    skos:definition "Links a repository to a container image it consumes rather than publishes (e.g. a service image named in a compose file). Kept separate from pulse:publishesImage because 'ships this' and 'runs against this' are different claims about a project." ;
+    gme:mapsFrom "_compose_images" .
+
+pulse:imageReference
+    a rdf:Property ;
+    rdfs:domain pulse:ContainerImage ;
+    rdfs:subPropertyOf schema:identifier ;
+    skos:prefLabel "image reference" ;
+    skos:definition "The full registry reference of the image, tag or digest included." .
+
+pulse:composeManifest
+    a rdf:Property ;
+    rdfs:domain schema:SoftwareSourceCode ;
+    skos:prefLabel "compose manifest" ;
+    skos:definition "A link to a container-orchestration manifest in the repository (docker-compose.yml, compose.yaml). Sits alongside pulse:publicCodeManifest, pulse:securityPolicy and pulse:codeOfConduct as a well-known repository file." ;
+    gme:mapsFrom "_compose_files" .
+
+
+# =========================================================================
+# 3. REPOSITORY HEALTH AND MATURITY
+#
+# The raw profile models hasWiki / hasPages / hasDiscussions but stops before
+# the maturity signals. These are precisely what a research-software
+# observatory gets asked ("is this maintained? is it tested? is it citable?"),
+# and GME already derives all of them.
+# =========================================================================
+
+pulse:hasContinuousIntegration
+    a rdf:Property ;
+    rdfs:range xsd:boolean ;
+    skos:prefLabel "has continuous integration" ;
+    skos:definition "Whether the repository has CI configured (a workflow or pipeline definition is present)." ;
+    gme:mapsFrom "_has_ci" .
+
+pulse:testCoverage
+    a rdf:Property ;
+    rdfs:range xsd:decimal ;
+    skos:prefLabel "test coverage" ;
+    skos:definition "Reported test-coverage percentage (0-100), as advertised by the repository (typically via a coverage badge or service). Self-reported, not verified." ;
+    gme:mapsFrom "_test_coverage" .
+
+pulse:communityHealthScore
+    a rdf:Property ;
+    rdfs:range xsd:integer ;
+    skos:prefLabel "community health score" ;
+    skos:definition "The platform's own community-profile completeness percentage (0-100), e.g. GitHub's community health percentage." ;
+    gme:mapsFrom "_community_health_percentage" .
+
+pulse:badgeCount
+    a rdf:Property ;
+    rdfs:range xsd:integer ;
+    skos:prefLabel "badge count" ;
+    skos:definition "The number of status badges in the repository README. A crude but effective maturity signal: CI, coverage, DOI, package and license badges cluster on maintained projects." ;
+    gme:mapsFrom "_badge_count" .
+
+# pulse:badge (a bare link per badge) was proposed here in the first draft.
+# Superseded by pulse:hasBadge → pulse:Badge in §16: the provider, subject and
+# asserted value are three facts about one assertion, and a link carries none
+# of them. pulse:badgeCount above stays — it is a cheap maturity signal that
+# needs no traversal.
+
+pulse:hasIssues
+    a rdf:Property ;
+    rdfs:range xsd:boolean ;
+    skos:prefLabel "has issues" ;
+    skos:definition "Whether the repository has its issue tracker enabled." ;
+    gme:mapsFrom "_has_issues" .
+
+pulse:hasProjects
+    a rdf:Property ;
+    rdfs:range xsd:boolean ;
+    skos:prefLabel "has projects" ;
+    skos:definition "Whether the repository has project boards enabled." ;
+    gme:mapsFrom "_has_projects", "_has_repository_projects", "_has_organization_projects" .
+
+pulse:hasIssueTemplate
+    a rdf:Property ;
+    rdfs:range xsd:boolean ;
+    skos:prefLabel "has issue template" ;
+    skos:definition "Whether the repository provides an issue template." ;
+    gme:mapsFrom "_has_issue_template" .
+
+pulse:hasPullRequestTemplate
+    a rdf:Property ;
+    rdfs:range xsd:boolean ;
+    skos:prefLabel "has pull request template" ;
+    skos:definition "Whether the repository provides a pull-request template." ;
+    gme:mapsFrom "_has_pull_request_template" .
+
+pulse:contributingGuide
+    a rdf:Property ;
+    skos:prefLabel "contributing guide" ;
+    skos:definition "A link to the repository's CONTRIBUTING file. Completes the well-known-files set alongside pulse:securityPolicy and pulse:codeOfConduct." ;
+    gme:mapsFrom "_contributing_url" .
+
+pulse:documentationUrl
+    a rdf:Property ;
+    skos:prefLabel "documentation URL" ;
+    skos:definition "A link to the project's documentation site, distinct from schema:url (the project's own page) and from pulse:readme." ;
+    gme:mapsFrom "_documentation_urls", "_homepage" .
+
+
+# =========================================================================
+# 4. REPOSITORY FACTS WITH NO HOME
+# =========================================================================
+
+pulse:sizeInBytes
+    a rdf:Property ;
+    rdfs:range xsd:integer ;
+    skos:prefLabel "size in bytes" ;
+    skos:definition "The repository's size in bytes as reported by the platform. pulse:fileCount counts files; this is the magnitude, which is what distinguishes a script from a dataset-bearing monorepo." ;
+    gme:mapsFrom "_size_kb" .
+
+pulse:forkNetworkCount
+    a rdf:Property ;
+    rdfs:range xsd:integer ;
+    skos:prefLabel "fork network count" ;
+    skos:definition "The size of the repository's fork network as reported by the platform. Distinct from pulse:repositoryForks (direct forks) and from pulse:dependentCount (packages/repositories depending on it)." ;
+    gme:mapsFrom "_network_count" .
+
+pulse:archivedDate
+    a rdf:Property ;
+    rdfs:range xsd:dateTime ;
+    skos:prefLabel "archived date" ;
+    skos:definition "When the repository was archived. pulse:archived records that it happened; for sustainability and lifecycle analysis the date is the useful part." ;
+    gme:mapsFrom "_archived_at" .
+
+pulse:primaryProgrammingLanguage
+    a rdf:Property ;
+    skos:prefLabel "primary programming language" ;
+    skos:definition "The dominant programming language as computed by the platform. schema:programmingLanguage is multi-valued and unordered, so the primary language cannot be recovered from it." ;
+    gme:mapsFrom "_primary_language" .
+
+pulse:profileReadme
+    a rdf:Property ;
+    skos:prefLabel "profile README" ;
+    skos:definition "A link to a Person's or Organization's profile README — the self-authored description on their platform profile, distinct from any repository's pulse:readme. Often the only prose a researcher writes about their own work." ;
+    gme:mapsFrom "_profile_readme" .
+
+
+# =========================================================================
+# 5. REGISTRY ORGANIZATION METADATA
+#
+# pulse:OrganizationProfile is thin (platform, handle, name, url, internalId,
+# description, location, followerCount, dateModified) and ROR is not a platform
+# at all (Section 8), so authoritative registry facts about an organization
+# have nowhere to land. GME reads all of these from ROR and Infoscience today.
+# =========================================================================
+
+pulse:establishedYear
+    a rdf:Property ;
+    rdfs:range xsd:gYear ;
+    skos:prefLabel "established year" ;
+    skos:definition "The year the organization was established, per an authoritative registry (e.g. ROR)." ;
+    gme:mapsFrom "_ror_established" .
+
+pulse:registryStatus
+    a rdf:Property ;
+    skos:prefLabel "registry status" ;
+    skos:definition "The organization's lifecycle status in the registry that identifies it (e.g. ROR 'active', 'inactive', 'withdrawn'). Matters because a withdrawn ROR record should not be treated as a live affiliation." ;
+    gme:mapsFrom "_ror_status" .
+
+pulse:acronym
+    a rdf:Property ;
+    skos:prefLabel "acronym" ;
+    skos:definition "An official acronym or short form for the organization (e.g. 'EPFL', 'SDSC'). Multi-valued. Acronyms are how affiliation strings are actually written in papers, so they are load-bearing for matching, not decoration." ;
+    gme:mapsFrom "_acronyms", "_parent_acronym" .
+
+pulse:unitCode
+    a rdf:Property ;
+    skos:prefLabel "unit code" ;
+    skos:definition "An institution-internal code identifying an organizational unit (e.g. an EPFL unit code). The only stable handle for sub-units that have no ROR of their own." ;
+    gme:mapsFrom "_unit_code", "_infoscience_code" .
+
+
+# =========================================================================
+# 6. NAME VARIANTS — no new term proposed
+#
+# GME carries _aliases, _original_name, _orcid_other_names and
+# _proposed_author_names. skos:altLabel already covers exactly this and both
+# profiles already import SKOS. Our request is only that skos:altLabel be
+# permitted on schema:Person, org:Organization and schema:SoftwareSourceCode
+# in the shapes — the closed shapes currently exclude it, so the data is
+# unexpressible despite the vocabulary existing.
+#
+# Name variants are the single highest-value input to entity resolution: most
+# failed person matches in our pipeline are a name written a second way.
+# =========================================================================
+
+
+# =========================================================================
+# 7. PACKAGE ECOSYSTEM ENUMERATION
+# =========================================================================
+
+pulse:PackageEcosystemEnumeration
+    a rdfs:Class ;
+    skos:prefLabel "Package Ecosystem Enumeration" ;
+    skos:definition "The registry ecosystems a Package can belong to. Values follow purl types so SBOM output maps without translation." .
+
+pulse:PyPI       a pulse:PackageEcosystemEnumeration ; skos:prefLabel "PyPI" .
+pulse:Npm        a pulse:PackageEcosystemEnumeration ; skos:prefLabel "npm" .
+pulse:Cargo      a pulse:PackageEcosystemEnumeration ; skos:prefLabel "Cargo (crates.io)" .
+pulse:Maven      a pulse:PackageEcosystemEnumeration ; skos:prefLabel "Maven" .
+pulse:NuGet      a pulse:PackageEcosystemEnumeration ; skos:prefLabel "NuGet" .
+pulse:GoModule   a pulse:PackageEcosystemEnumeration ; skos:prefLabel "Go module" .
+pulse:Conda      a pulse:PackageEcosystemEnumeration ; skos:prefLabel "Conda" .
+pulse:RubyGems   a pulse:PackageEcosystemEnumeration ; skos:prefLabel "RubyGems" .
+pulse:Docker     a pulse:PackageEcosystemEnumeration ; skos:prefLabel "Docker" .
+pulse:GitHubActions a pulse:PackageEcosystemEnumeration ; skos:prefLabel "GitHub Actions" .
+pulse:OtherEcosystem a pulse:PackageEcosystemEnumeration ; skos:prefLabel "Other" .
+
+
+# =========================================================================
+# 8. ENUMERATION MEMBERS TO ADD
+#
+# The cheapest changes in this file: no new classes, no shape edits.
+# =========================================================================
+
+# --- PlatformEnumeration -------------------------------------------------
+# Currently: GitHub, GitLab, Bitbucket, Infoscience, ORCID, HuggingFace, Zenodo.
+# GME reads all of the following in production. ROR is the sharp one: it is our
+# canonical organization authority and cannot currently be named as a source.
+
+pulse:ROR         a pulse:PlatformEnumeration ; skos:prefLabel "ROR" ;
+    skos:definition "Research Organization Registry — the authority behind org:Organization @ids in this ecosystem." .
+pulse:DockerHub   a pulse:PlatformEnumeration ; skos:prefLabel "Docker Hub" .
+pulse:OpenAlex    a pulse:PlatformEnumeration ; skos:prefLabel "OpenAlex" .
+pulse:ETHZResearchCollection a pulse:PlatformEnumeration ; skos:prefLabel "ETH Research Collection" .
+pulse:SNSF        a pulse:PlatformEnumeration ; skos:prefLabel "SNSF" ;
+    skos:definition "Swiss National Science Foundation grant data." .
+pulse:SWISSUbase  a pulse:PlatformEnumeration ; skos:prefLabel "SWISSUbase" .
+pulse:RenkuLab    a pulse:PlatformEnumeration ; skos:prefLabel "RenkuLab" .
+pulse:EPFLGraph   a pulse:PlatformEnumeration ; skos:prefLabel "EPFL Graph" ;
+    skos:definition "The EPFL Graph academic-discipline ontology service." .
+
+# --- added 2026-08-07 after auditing the enumeration against what we read ---
+# The check: list every source with an index or a wired provider, subtract the
+# members upstream and above. These six were left over, and four of them are
+# sources whose data is already in the conversion test.
+
+pulse:CORDIS      a pulse:PlatformEnumeration ; skos:prefLabel "CORDIS" ;
+    skos:definition "The EU research-projects database (EURIO/s66 in the rete scholarly hub, where s66:Project ⊑ scholar:Project). The project-and-grant dimension for European funding: without it an EU grant agreement number has a value but no source. Reachable through OpenAIRE, which aggregates it." .
+pulse:SNSF_P3     a pulse:PlatformEnumeration ; skos:prefLabel "SNSF P3" ;
+    skos:definition "The SNSF (Fonds National Suisse) P3 grant database, distinct from pulse:SNSF as an organization: this names the DATA SOURCE. Distributed as a bulk CSV rather than an API, which is why a source term matters — the provenance of a P3 row is a dated download, not a live endpoint." .
+pulse:DepsDev     a pulse:PlatformEnumeration ; skos:prefLabel "deps.dev" ;
+    skos:definition "Google Open Source Insights. §19 aligns our package layer to it, and the conversion test takes real dependency data from it — yet without a member here, a deps.dev-sourced fact cannot name its origin in pulse:sourcePlatform or partOfRun." .
+pulse:Ecosystems  a pulse:PlatformEnumeration ; skos:prefLabel "ecosyste.ms" ;
+    skos:definition "The ecosyste.ms platform (§21). Same argument as deps.dev: we consume it, so its output needs a name." .
+pulse:Crossref    a pulse:PlatformEnumeration ; skos:prefLabel "Crossref" ;
+    skos:definition "The DOI registration agency and the authority for Funder IDs — pulse:CrossrefFunderScheme above names its identifiers, so the platform issuing them should be nameable too." .
+pulse:GHArchive   a pulse:PlatformEnumeration ; skos:prefLabel "GH Archive" ;
+    skos:definition "The GitHub event firehose. Not consumed today, but it is the bulk route to pulse:GitIdentity (see git-author-identities.md), and naming it now costs one line." .
+
+# NOT added: PyPI, npm, Maven and the other registries. They are package
+# ECOSYSTEMS (pulse:PackageEcosystemEnumeration, §7), not extraction sources —
+# we learn about a PyPI package from deps.dev or ecosyste.ms, never from PyPI
+# directly. Adding them here would conflate "where the artifact lives" with
+# "who told us about it", which is exactly the distinction pulse:sourcePlatform
+# exists to make.
+
+# --- IdentifierSchemeEnumeration ----------------------------------------
+# Currently: arXiv, Scopus, ResearcherId, ISBN, ISSN, PMID, Ringgold, GRID,
+# ISNI, SWHID, Other. Infoscience is missing even though pulse:Infoscience
+# exists as a platform, so all three Infoscience identifier kinds we carry
+# (person, organization, article) collapse to OtherIdentifierScheme and lose
+# their scheme.
+
+pulse:InfoscienceScheme a pulse:IdentifierSchemeEnumeration ; skos:prefLabel "Infoscience" ;
+    skos:definition "An EPFL Infoscience record identifier." ;
+    gme:mapsFrom "_infoscience_code", "_infoscience_url" .
+pulse:OpenAlexScheme    a pulse:IdentifierSchemeEnumeration ; skos:prefLabel "OpenAlex" .
+pulse:RORScheme         a pulse:IdentifierSchemeEnumeration ; skos:prefLabel "ROR" ;
+    skos:definition "For contexts where a ROR id appears as an external identifier rather than as an @id." .
+
+
+# =========================================================================
+# 9. GIT IDENTITIES — one person commits under many names and emails
+#
+# THE PROBLEM: canonical pulse:ContributionShape defines pulse:gitAuthorName
+# and pulse:gitAuthorEmail, both with sh:maxCount 1, described as "the author
+# name as it literally appeared in the aggregated commits" — singular. But a
+# Contribution is one (person, repository) pair, and one person commits under
+# SEVERAL (name, email) pairs: work laptop vs personal machine, a
+# users.noreply.github.com address after enabling email privacy, a changed
+# employer address, a typo'd name. That plurality is the entire reason
+# .mailmap exists.
+#
+# With maxCount 1 an extractor must pick one identity and silently discard the
+# rest. We have a downstream requirement for ALL author names and emails a
+# repository yields, so this is the one place where the current shapes block a
+# use case outright rather than merely lacking a term.
+#
+# THE ASK: a first-class git identity node, so the (name, email) pair is the
+# subject and its commit count and date range hang off it. Minimal
+# alternative if you would rather not add a class: raise gitAuthorName and
+# gitAuthorEmail to sh:maxCount unbounded — but then the pairing between a
+# name and the email it was used with is lost, which is what makes identity
+# reconciliation possible.
+#
+# Rationale: dev/v4.0.0/git-author-identities.md
+# =========================================================================
+
+pulse:GitIdentity
+    a rdfs:Class ;
+    skos:prefLabel "Git Identity" ;
+    skos:definition "One (author name, author email) pair as it literally appears in a repository's commit history, together with how much it committed and when. A Person typically has several per repository; keeping the pair as one node preserves which name was used with which email, which is the strongest signal available for reconciling identities." .
+
+pulse:hasGitIdentity
+    a rdf:Property ;
+    rdfs:range pulse:GitIdentity ;
+    owl:inverseOf pulse:gitIdentityOf ;
+    skos:prefLabel "has git identity" ;
+    skos:definition "Links a Contribution (or a Person) to a git identity observed in the commit history. Multi-valued by design." .
+
+pulse:gitIdentityOf
+    a rdf:Property ;
+    rdfs:domain pulse:GitIdentity ;
+    skos:prefLabel "git identity of" ;
+    skos:definition "Links a git identity back to the Contribution or Person it belongs to." .
+
+pulse:gitIdentityRole
+    a rdf:Property ;
+    rdfs:domain pulse:GitIdentity ;
+    skos:prefLabel "git identity role" ;
+    skos:definition "Whether this identity appeared as the commit author, the committer, or a Co-authored-by trailer. These answer different questions: rebases and web-UI edits set a different committer, and trailer identities never appear as the author at all — so pair-programmed work is invisible if only authors are read." .
+
+pulse:isBotIdentity
+    a rdf:Property ;
+    rdfs:domain pulse:GitIdentity ;
+    rdfs:range xsd:boolean ;
+    skos:prefLabel "is bot identity" ;
+    skos:definition "Whether this identity is an automation account (dependabot[bot], github-actions[bot], renovate[bot], ...). Bots are commit authors and are not people; without this flag they inflate contributor counts and cause Person entities to be created for machines." .
+
+pulse:isPseudonymousEmail
+    a rdf:Property ;
+    rdfs:domain pulse:GitIdentity ;
+    rdfs:range xsd:boolean ;
+    skos:prefLabel "is pseudonymous email" ;
+    skos:definition "Whether the address is a platform-issued privacy address (e.g. 12345+login@users.noreply.github.com) rather than a contact address. Distinguishing the two matters: a noreply address carries no affiliation signal and must not be presented as a way to reach someone." .
+
+pulse:mailmapApplied
+    a rdf:Property ;
+    rdfs:domain pulse:GitIdentity ;
+    rdfs:range xsd:boolean ;
+    skos:prefLabel "mailmap applied" ;
+    skos:definition "Whether this identity was normalised through the repository's .mailmap. A mailmap entry is the maintainer's own assertion that two identities are the same person — better evidence than anything an extractor can infer, and worth recording as such." .
+
+# --- The email, hashed, with the domain kept ----------------------------
+# DECIDED (2026-07-31): GME will not emit full commit addresses at all. Every
+# identity carries the hashed local part and the domain, which is what
+# pipeline/stages/privacy.py already produces today
+# (local@domain -> <sha256(local)[:12]>@domain). The domain is the part our
+# ROR resolvers actually use; the hash is enough to join identities across
+# records. So pulse:gitAuthorEmail stays defined in the canonical profile and
+# we simply never populate it — no opt-in, no flag, no full addresses.
+#
+# One request that follows from that: keep these as TWO properties rather
+# than reusing pulse:gitAuthorEmail for a hashed composite. "a1b2c3d4e5f6@epfl.ch"
+# satisfies the email sh:pattern in RawPlatformProfileShape
+# (^[\w\-\.\+]+@([\w-]+\.)+[\w-]{2,}$), so a consumer receiving it in an email
+# field has no way to tell a pseudonymised value from a real mailbox and may
+# try to write to it. Separate properties make the distinction unambiguous in
+# the data instead of in a comment.
+
+pulse:gitAuthorEmailDomain
+    a rdf:Property ;
+    rdfs:domain pulse:GitIdentity ;
+    skos:prefLabel "git author email domain" ;
+    skos:definition "The domain part of the address, local part discarded. Carries the institutional affiliation signal — which is all our ROR resolvers use — with no personal identifier." ;
+    gme:mapsFrom "_email" .
+
+pulse:gitAuthorEmailHash
+    a rdf:Property ;
+    rdfs:domain pulse:GitIdentity ;
+    skos:prefLabel "git author email hash" ;
+    skos:definition "A stable one-way hash of the address's local part, letting consumers join identities across records without holding the address itself. Stable across runs and repositories, so the same person's commits under one address collapse wherever they appear." ;
+    gme:mapsFrom "_email" .
+
+# pulse:gitAuthorEmail (already defined in the canonical profile) is the full
+# address. We propose no change to it and will not populate it. The only
+# change we need on it is cardinality — see the shape fragments in Section 10.
+#
+# Author NAMES are emitted in full: they are the authorship record itself,
+# they are what CITATION.cff and the commit log exist to state, and a hashed
+# name would defeat attribution, which is the point of the graph.
+
+
+# --- Proposed shape for the new node ------------------------------------
+
+pulse:ProposedGitIdentityShape
+    a sh:NodeShape ;
+    sh:targetClass pulse:GitIdentity ;
+    sh:closed true ;
+    sh:ignoredProperties ( rdf:type owl:sameAs ) ;
+    sh:property [ sh:path pulse:gitAuthorName ; sh:datatype xsd:string ; sh:maxCount 1 ; sh:name "Git Author Name" ] ;
+    sh:property [ sh:path pulse:gitAuthorEmail ; sh:datatype xsd:string ; sh:maxCount 1 ; sh:name "Git Author Email" ] ;
+    sh:property [ sh:path pulse:gitAuthorEmailDomain ; sh:datatype xsd:string ; sh:maxCount 1 ; sh:name "Email Domain" ] ;
+    sh:property [ sh:path pulse:gitAuthorEmailHash ; sh:datatype xsd:string ; sh:maxCount 1 ; sh:name "Email Hash" ] ;
+    sh:property [ sh:path pulse:gitIdentityRole ; sh:datatype xsd:string ; sh:name "Role" ] ;
+    sh:property [ sh:path pulse:contributionCount ; sh:datatype xsd:integer ; sh:maxCount 1 ; sh:name "Commit Count" ] ;
+    sh:property [ sh:path pulse:firstContributionDate ; sh:datatype xsd:dateTime ; sh:maxCount 1 ; sh:name "First Commit" ] ;
+    sh:property [ sh:path pulse:lastContributionDate ; sh:datatype xsd:dateTime ; sh:maxCount 1 ; sh:name "Last Commit" ] ;
+    sh:property [ sh:path pulse:isBotIdentity ; sh:datatype xsd:boolean ; sh:maxCount 1 ; sh:name "Is Bot" ] ;
+    sh:property [ sh:path pulse:isPseudonymousEmail ; sh:datatype xsd:boolean ; sh:maxCount 1 ; sh:name "Is Pseudonymous" ] ;
+    sh:property [ sh:path pulse:mailmapApplied ; sh:datatype xsd:boolean ; sh:maxCount 1 ; sh:name "Mailmap Applied" ] ;
+    sh:property [ sh:path pulse:gitIdentityOf ; sh:name "Identity Of" ] ;
+    sh:property [ sh:path pulse:partOfRun ; sh:class pulse:ExtractionOutput ; sh:maxCount 1 ; sh:name "Part Of Run" ] .
+
+
+# =========================================================================
+# 13. REUSE AND ALIGNMENT — from the rete scholarly graphs
+#
+# Added 2026-07-31 after surveying the rete catalog and its alignment
+# ontology (dev/rete/scholar.ttl v1.4.0). Two kinds of entry:
+#
+#   (a) ALIGNMENT of terms proposed above to vocabularies already in use by
+#       the sibling scholarly graphs, so our output joins them without a
+#       mapping table. Reuse beats minting, and these cost one axiom each.
+#   (b) TWO NEW TERMS that a real Zenodo record proved we cannot express.
+#
+# VERIFICATION STATUS — their own review found several non-existent IRIs in
+# this space (fabio:hasReference, six invented CiTO terms), so provenance is
+# marked per line. LOV's term API was returning 404 during this work, so
+# anything not verified from data or from scholar.ttl is flagged TO-VERIFY
+# rather than asserted.
+# =========================================================================
+
+# --- (a) alignment axioms ------------------------------------------------
+# cito: and frapo: IRIs verified from dev/rete/scholar.ttl, whose README
+# documents correcting frapo: from the non-existent purl.org/spar/frapo/ to
+# purl.org/cerif/frapo/. dct: is Dublin Core Terms.
+
+pulse:references    rdfs:subPropertyOf cito:cites .        # OpenCitations/SPAR idiom; `opencitations` is the crosswalk hub
+pulse:keyword       rdfs:subPropertyOf dct:subject .       # what Zenodo actually emits — ~30 dct:subject literals on one record
+pulse:Funding       rdfs:subClassOf    frapo:Grant .       # scholar:Grant ⊑ frapo:Grant unifies oaire/orcid/cx Funding
+pulse:Collection    rdfs:subClassOf    skos:Collection .   # verified: skos:Collection is an owl:Class
+pulse:Package       rdfs:subClassOf    spdx:Package .      # verified: spdx:Package is an owl:Class in SPDX 2.3.
+#   Our dependency data IS an SPDX SBOM, so this buys the SBOM ecosystem for
+#   one axiom. Caveat: verified against SPDX 2.3 (versionIRI
+#   http://spdx.org/rdf/terms/2.3); SPDX 3.0 moved to a different namespace,
+#   so re-point this when you adopt 3.0.
+
+# --- (b) the deposit relation, which we cannot currently express ---------
+# EVIDENCE (queried 2026-07-31, dataset `zenodo-records`, record
+# https://doi.org/10.0.20.161/zenodo.15848625):
+#
+#   dcite:isDerivedFrom  → https://github.com/MUESdummy/Emergent-Necessity-Theory-ENT-
+#   dcite:isPartOf       → https://github.com/…/tree/main/Simulationa
+#   dcite:isSupplementTo → https://github.com/…/blob/174121c…/ENT_….pdf
+#   dcite:creator        → https://orcid.org/0009-0001-0536-8504
+#
+# Zenodo states not just THAT a record relates to a GitHub repository but
+# HOW — derived-from, part-of, supplement-to — and it does so against exactly
+# the IRI form GME mints for repositories. pulse:hasDeposit (RawArticleShape)
+# carries the link but not the relation, so that distinction is lost on
+# import. "This DOI is the archived snapshot of that repo" and "this DOI is a
+# PDF that supplements it" are different claims about software citation.
+
+pulse:DepositRelationEnumeration
+    a rdfs:Class ;
+    skos:prefLabel "Deposit Relation Enumeration" ;
+    skos:definition "How an archived deposit relates to the resource it was deposited from. Values mirror the DataCite relation types actually observed on Zenodo records." .
+
+pulse:DerivedFrom   a pulse:DepositRelationEnumeration ; skos:prefLabel "derived from" ;
+    skos:definition "The deposit was produced from the resource — e.g. an archived snapshot of a repository at a release." .
+pulse:SupplementTo  a pulse:DepositRelationEnumeration ; skos:prefLabel "supplement to" ;
+    skos:definition "The deposit supplements the resource — e.g. a PDF or figure set accompanying the code." .
+pulse:PartOf        a pulse:DepositRelationEnumeration ; skos:prefLabel "part of" ;
+    skos:definition "The deposit covers part of the resource — e.g. one subdirectory of a repository." .
+pulse:DocumentedBy  a pulse:DepositRelationEnumeration ; skos:prefLabel "documented by" ;
+    skos:definition "The deposit documents the resource." .
+
+pulse:depositRelation
+    a rdf:Property ;
+    rdfs:range pulse:DepositRelationEnumeration ;
+    skos:prefLabel "deposit relation" ;
+    skos:definition "How this deposit relates to the repository or work it was deposited from. Without it, pulse:hasDeposit cannot distinguish an archived snapshot of the code from a paper that merely accompanies it." .
+
+# --- (b continued) access rights ----------------------------------------
+# EVIDENCE: the same record carries two dct:license values —
+#   <https://creativecommons.org/licenses/by/4.0/legalcode>  (the licence)
+#   <info:eu-repo/semantics/openAccess>                       (the access status)
+# Neither profile models access status, yet for a research-output observatory
+# "is this open?" is a first-order question, and the vocabulary for it is
+# already standard in the repository world.
+
+pulse:accessRights
+    a rdf:Property ;
+    rdfs:subPropertyOf dct:accessRights ;   # verified: dcterms:accessRights is an rdf:Property
+    skos:prefLabel "access rights" ;
+    skos:definition "The access status of a work or deposit, as an info:eu-repo/semantics/* IRI (openAccess, embargoedAccess, restrictedAccess, closedAccess). Kept separate from schema:license: a CC-BY licence and an embargo can coexist, and conflating them makes 'open' unqueryable." .
+
+
+# =========================================================================
+# 14. SOURCES WE READ BUT CANNOT TYPE
+#
+# From the source-by-source audit in raw-source-coverage.md. Each item below
+# is a record kind or relation we receive from a source already wired into the
+# pipeline, and currently discard because no term accepts it.
+#
+# The EPFL Infoscience ontology (dev/rete/epfl-infoscience.ttl v1.2.0) is the
+# evidence: it models DSpace-CRIS faithfully and therefore enumerates exactly
+# what an Infoscience query returns. Our article agent queries Infoscience in
+# production, so these are live gaps, not hypotheticals.
+#
+# Following that ontology's own rule — reuse the standard, mint only the
+# residue — most of this is enumeration members and alignments, not new
+# classes.
+# =========================================================================
+
+# --- output kinds: add members, don't add classes ------------------------
+# PublicationTypeEnumeration already has SoftwarePublication,
+# DatasetPublication, Poster, Presentation, Image, Video, Workflow,
+# PhysicalObject. Two kinds Infoscience returns are missing.
+
+pulse:ThesisPublication a pulse:PublicationTypeEnumeration ; skos:prefLabel "Thesis" ;
+    skos:definition "A thesis or dissertation (infs:Thesis ⊑ schema:Thesis, fabio:Thesis). EPFL doctoral output is a large share of what Infoscience holds, and it is how a researcher's earliest work is recorded." .
+pulse:PatentPublication a pulse:PublicationTypeEnumeration ; skos:prefLabel "Patent" ;
+    skos:definition "A patent (infs:Patent ⊑ fabio:Patent). Distinct from a scholarly article in review, ownership and citation behaviour." .
+
+# --- the venue: reuse fabio:Journal, do not mint ------------------------
+# Infoscience models journals as a first-class entity (infs:Journal ⊑
+# schema:Periodical, fabio:Journal) with ISSN/eISSN. Neither profile has a
+# venue concept, so "published in" is unexpressible — yet venue is the
+# primary axis bibliometrics is read on.
+
+pulse:publishedInVenue
+    a rdf:Property ;
+    rdfs:range fabio:Journal ;
+    skos:prefLabel "published in venue" ;
+    skos:definition "The journal, serial or proceedings an article appeared in. Range is fabio:Journal, reused rather than minted — Infoscience, DBLP and the rete scholarly hub all already model the venue that way. Identify it by ISSN where possible: https://portal.issn.org/resource/ISSN/{issn}, the IRI form the rete hub uses." .
+
+pulse:issn
+    a rdf:Property ;
+    rdfs:subPropertyOf schema:identifier ;
+    skos:prefLabel "ISSN" ;
+    skos:definition "The ISSN of a venue (infs:issn / infs:eissn). The canonical join key for serials across DBLP, Crossref and Infoscience." .
+
+# --- supervision: a person→person edge nothing expresses ----------------
+
+pulse:hasAdvisor
+    a rdf:Property ;
+    rdfs:domain schema:Person ;
+    rdfs:range schema:Person ;
+    owl:inverseOf pulse:advisorOf ;
+    skos:prefLabel "has advisor" ;
+    skos:definition "The doctoral advisor or thesis supervisor of a person (infs:hasAdvisor, from dc.contributor.advisor). No property in pulse: relates one person to another, so academic lineage — arguably the strongest signal of how research groups actually propagate — cannot be recorded at all." .
+
+pulse:advisorOf
+    a rdf:Property ;
+    rdfs:domain schema:Person ;
+    rdfs:range schema:Person ;
+    skos:prefLabel "advisor of" ;
+    skos:definition "Inverse of pulse:hasAdvisor." .
+
+# --- identifiers: sciper is the EPFL Graph join key ---------------------
+
+pulse:SciperScheme a pulse:IdentifierSchemeEnumeration ; skos:prefLabel "EPFL Sciper" ;
+    skos:definition "An EPFL sciper — the institutional person id (infs:sciper, epfl.sciperId). Documented in the Infoscience ontology as the join key to the EPFL Graph dataset, which we already query for disciplines, so without it we cannot connect a person to the discipline graph we consume." ;
+    gme:mapsFrom "_infoscience_code" .
+
+# --- organizational granularity -----------------------------------------
+
+pulse:orgUnitLevel
+    a rdf:Property ;
+    skos:prefLabel "org unit level" ;
+    skos:definition "Where a unit sits in its institution's hierarchy — lab, institute, section, school (infs:orgUnitLevel). org:unitOf gives the parent edge but not the rank, so 'is this a lab or a faculty?' cannot be answered, and that is what decides whether an affiliation is specific enough to be useful." ;
+    gme:mapsFrom "_unit_code" .
+
+# --- the abstract, which we read and drop -------------------------------
+
+pulse:abstract
+    a rdf:Property ;
+    rdfs:subPropertyOf dct:abstract ;   # verified: dcterms:abstract is an rdf:Property
+    skos:prefLabel "abstract" ;
+    skos:definition "The abstract of a work (infs:abstract, dc.description.abstract). We fetch it from Infoscience today and discard it; it is the single most useful text for discipline classification and for LLM-side judgement about what a work is." .
+
+
+# =========================================================================
+# 15. ROR, AND WHY WE ARE NOT ASKING FOR MANY MORE CLASSES
+#
+# rete's ROR vocabulary (dev/rete/scholar.ttl) is small and pointed:
+#   ror:Organization ⊑ scholar:Organization
+#   ror:Funder       ⊑ scholar:Funder
+#   ror:rorId ⊑ scholar:ror · ror:grid ⊑ scholar:grid
+#   ror:isni  ⊑ scholar:isni · ror:fundref ⊑ scholar:fundref
+#   ror:wikidata ⊑ scholar:wikidata
+#
+# Note what rete does NOT do: it does not model a ROR *record* separate from
+# the organization. Because the org is minted AT https://ror.org/{id}, the ROR
+# node simply IS the organization, and its registry facts are properties of
+# it. That is the same choice we make — our org:Organization @id is the ROR —
+# so the natural home for established year, status, types and acronyms is the
+# Organization itself.
+#
+# The obstacle is not conceptual, it is the shape: canonical OrganizationShape
+# is sh:closed and admits none of those fields, and RawOrganizationProfileShape
+# is platform-scoped (handle, followers, avatar) — a ROR record is an authority
+# record, not a social profile. So:
+#
+#   PREFERRED — widen the Organization shapes to admit the §5 registry
+#   properties (establishedYear, registryStatus, acronym, unitCode,
+#   orgUnitLevel). Matches rete, keeps one node per organization, no new class.
+#
+#   FALLBACK — if you want Organization to stay thin, take
+#   pulse:RegistryRecord below and hang the registry facts off it. We have no
+#   preference beyond "the facts must land somewhere".
+# =========================================================================
+
+pulse:RegistryRecord
+    a rdfs:Class ;
+    skos:prefLabel "Registry Record" ;
+    skos:definition "An authority record about an organization in a registry (ROR, GRID, ISNI, Wikidata), as distinct from a platform profile: it asserts what the organization IS rather than what it does on a site. Only needed if the Organization shapes stay closed to registry facts — see the note above." .
+
+pulse:hasRegistryRecord
+    a rdf:Property ;
+    rdfs:domain org:Organization ;
+    rdfs:range pulse:RegistryRecord ;
+    skos:prefLabel "has registry record" ;
+    skos:definition "Links an organization to an authority record describing it." .
+
+# --- the crosswalk: enumeration members, not new properties -------------
+# IdentifierSchemeEnumeration already carries Ringgold, GRID and ISNI, so
+# ror:grid and ror:isni need no new property — they are
+# pulse:hasExternalIdentifier with a scheme. Two schemes are missing.
+
+pulse:WikidataScheme a pulse:IdentifierSchemeEnumeration ; skos:prefLabel "Wikidata" ;
+    skos:definition "A Wikidata QID (ror:wikidata). We already emit wd: IRIs for disciplines, so the vocabulary is in our output already; this covers the organization crosswalk." .
+pulse:CrossrefFunderScheme a pulse:IdentifierSchemeEnumeration ; skos:prefLabel "Crossref Funder ID" ;
+    skos:definition "A Crossref Funder ID (ror:fundref). The rete hub makes Crossref the authority for this key and mints it at https://doi.org/10.13039/{id} — it is how DataCite funding references join to an organization." .
+
+# --- classes we deliberately do NOT propose ------------------------------
+#
+# pulse:Funder — rete has ror:Funder ⊑ scholar:Funder, and we still would not
+#   ask for it. Funding is a ROLE an organization plays in relation to a work,
+#   not a kind of thing: EPFL funds some work and performs other work. As a
+#   class it forces every organization that ever funded anything to carry a
+#   second type, and every consumer to union two classes to ask "which
+#   organization is this". schema:funder as a property already says it, and it
+#   says it about the relationship, which is where the fact belongs.
+#
+# A venue class — reused fabio:Journal instead (§14).
+#
+# (Badge and Dependency were listed here in the first draft as "a link and an
+#  edge, neither earns identity". That was wrong — see §16. Both carry
+#  structure that a bare link or a bare edge cannot hold, and in both cases
+#  the lost structure is the useful part.)
+#
+# SWISSUbase Study, RenkuLab Project — we read those indices for search, not
+#   to emit entities. Classing them would be modelling ahead of the
+#   requirement.
+#
+# A class per platform-profile kind (GitHubProfile, ORCIDProfile, …) — that is
+#   what pulse:platform on one PlatformProfile is for. Subclassing per platform
+#   multiplies shapes without adding a single fact.
+#
+# The test we applied: a class earns its keep when the thing has identity of
+# its own, its own lifecycle, and properties that make no sense on anything
+# else. Package, ContainerImage, GitIdentity and (conditionally) RegistryRecord
+# pass. Everything above fails it, and each avoided class is one fewer closed
+# shape to keep in sync across three profiles.
+
+
+# =========================================================================
+# 16. BADGES AND DEPENDENCIES, MODELLED PROPERLY
+#
+# Correcting §3 and §1, which reduced these to pulse:badge (a link) and
+# pulse:dependsOnPackage (an edge) plus counts. Both throw away the part we
+# actually want.
+#
+# A BADGE IS AN ASSERTION WITH A VALUE AND A SOURCE, not a link. What a
+# README badge encodes:
+#     provider   Codecov, GitHub Actions, Zenodo, PyPI, conda-forge, JOSS,
+#                OpenSSF Scorecard, readthedocs …
+#     subject    what is being claimed — build status, coverage, DOI, version,
+#                downloads, licence, security score
+#     value      the claim itself — "passing", "87%", "10.5281/zenodo.1234",
+#                "v1.2.3"
+#     image + target URLs
+# As one link we lose all four, and every consumer has to re-parse badge URLs
+# to get them back. Worse, badges are frequently the ONLY place some facts
+# appear: a DOI badge names the Zenodo deposit, a PyPI badge names the
+# package, a JOSS badge names the paper. So a badge is also a discovery bridge
+# to pulse:Package, pulse:hasDeposit and schema:ScholarlyArticle — which is
+# exactly what a bare link cannot express.
+#
+# A DEPENDENCY IS A QUALIFIED RELATION, and your own model already says so:
+# org:Membership qualifies person↔organization and pulse:Contribution
+# qualifies person↔repository, rather than being plain edges. A dependency has
+# the same shape. From the SPDX SBOM we get, per dependency: the resolved
+# version, the declared constraint, the scope (runtime / dev / build / test),
+# which manifest declared it, and whether it is direct or transitive.
+# "depends on pypi:requests" cannot say any of that — and "a dev dependency
+# pinned in pyproject.toml" versus "a transitive runtime dependency" is the
+# difference between a real dependency graph and a bag of names.
+# =========================================================================
+
+# --- badges ---------------------------------------------------------------
+
+pulse:Badge
+    a rdfs:Class ;
+    skos:prefLabel "Badge" ;
+    skos:definition "A status badge declared in a repository's README: a claim by some service about the repository, with an asserted value. Modelled as a node because provider, subject and value are three facts about one assertion, and because badges routinely name artifacts — a DOI, a package, a paper — that appear nowhere else in the repository metadata." ;
+    gme:mapsFrom "_badges" .
+
+pulse:hasBadge
+    a rdf:Property ;
+    rdfs:domain schema:SoftwareSourceCode ;
+    rdfs:range pulse:Badge ;
+    skos:prefLabel "has badge" ;
+    skos:definition "Links a repository to a badge declared in its README." ;
+    gme:mapsFrom "_badges" .
+
+pulse:badgeProvider
+    a rdf:Property ;
+    rdfs:domain pulse:Badge ;
+    skos:prefLabel "badge provider" ;
+    skos:definition "The service making the claim (Codecov, GitHub Actions, Zenodo, PyPI, JOSS, OpenSSF Scorecard, …). Left open rather than enumerated: the set of badge services is long-tailed and changes faster than an ontology release." .
+
+pulse:badgeSubject
+    a rdf:Property ;
+    rdfs:domain pulse:Badge ;
+    rdfs:range pulse:BadgeSubjectEnumeration ;
+    skos:prefLabel "badge subject" ;
+    skos:definition "What the badge claims — build status, coverage, DOI, and so on. Enumerated because this is the axis consumers filter on." .
+
+pulse:badgeValue
+    a rdf:Property ;
+    rdfs:domain pulse:Badge ;
+    skos:prefLabel "badge value" ;
+    skos:definition "The asserted value as displayed: 'passing', '87%', 'v1.2.3', a DOI. Kept as a literal because badge values are self-reported and unverified — recording them as typed measurements would lend them a precision they do not have." .
+
+pulse:badgeImage
+    a rdf:Property ;
+    rdfs:domain pulse:Badge ;
+    skos:prefLabel "badge image" ;
+    skos:definition "The badge's image URL (usually a shields.io-style endpoint, which itself encodes the provider and subject)." .
+
+pulse:badgeTarget
+    a rdf:Property ;
+    rdfs:domain pulse:Badge ;
+    skos:prefLabel "badge target" ;
+    skos:definition "Where the badge links to — the CI run, the coverage report, the Zenodo record, the package page." .
+
+pulse:badgeAsserts
+    a rdf:Property ;
+    rdfs:domain pulse:Badge ;
+    skos:prefLabel "badge asserts" ;
+    skos:definition "Links a badge to the entity it identifies, when it names one: a pulse:Package for a registry badge, a schema:ScholarlyArticle for a JOSS or DOI badge, a deposit for a Zenodo badge. This is the discovery value of badges — often the repository states its DOI or its package name nowhere else." .
+
+pulse:BadgeSubjectEnumeration
+    a rdfs:Class ;
+    skos:prefLabel "Badge Subject Enumeration" ;
+    skos:definition "What a badge claims about a repository." .
+
+pulse:BuildStatusBadge   a pulse:BadgeSubjectEnumeration ; skos:prefLabel "build status" .
+pulse:CoverageBadge      a pulse:BadgeSubjectEnumeration ; skos:prefLabel "test coverage" .
+pulse:DoiBadge           a pulse:BadgeSubjectEnumeration ; skos:prefLabel "DOI" ;
+    skos:definition "Names an archived deposit — the usual way a repository declares its citable DOI." .
+pulse:PackageVersionBadge a pulse:BadgeSubjectEnumeration ; skos:prefLabel "package version" ;
+    skos:definition "Names a registry package and its published version." .
+pulse:DownloadsBadge     a pulse:BadgeSubjectEnumeration ; skos:prefLabel "downloads" .
+pulse:LicenseBadge       a pulse:BadgeSubjectEnumeration ; skos:prefLabel "license" .
+pulse:SecurityScoreBadge a pulse:BadgeSubjectEnumeration ; skos:prefLabel "security score" ;
+    skos:definition "An OpenSSF Scorecard or comparable automated security assessment." .
+pulse:DocumentationBadge a pulse:BadgeSubjectEnumeration ; skos:prefLabel "documentation" .
+pulse:PublicationBadge   a pulse:BadgeSubjectEnumeration ; skos:prefLabel "publication" ;
+    skos:definition "Names a paper about the software — a JOSS review badge, for instance." .
+pulse:ChatBadge          a pulse:BadgeSubjectEnumeration ; skos:prefLabel "chat / community" .
+pulse:FundingBadge       a pulse:BadgeSubjectEnumeration ; skos:prefLabel "funding" .
+pulse:OtherBadgeSubject  a pulse:BadgeSubjectEnumeration ; skos:prefLabel "other" .
+
+# --- dependencies as a qualified relation --------------------------------
+# Same pattern as org:Membership and pulse:Contribution: the relation is a
+# node because it carries facts of its own. pulse:dependsOnPackage (§1) stays
+# as the direct shortcut for consumers who only need the edge.
+
+pulse:DependencyRelation
+    a rdfs:Class ;
+    skos:prefLabel "Dependency Relation" ;
+    skos:definition "One declared dependency of a repository on a package, qualified with the facts an SBOM actually provides: resolved version, declared constraint, scope, the manifest that declared it, and whether it is direct or transitive." .
+
+pulse:hasDependency
+    a rdf:Property ;
+    rdfs:domain schema:SoftwareSourceCode ;
+    rdfs:range pulse:DependencyRelation ;
+    skos:prefLabel "has dependency" ;
+    skos:definition "Links a repository to a qualified dependency relation." .
+
+pulse:dependencyTarget
+    a rdf:Property ;
+    rdfs:domain pulse:DependencyRelation ;
+    rdfs:range pulse:Package ;
+    skos:prefLabel "dependency target" ;
+    skos:definition "The package depended upon." .
+
+pulse:dependencyScope
+    a rdf:Property ;
+    rdfs:domain pulse:DependencyRelation ;
+    rdfs:range pulse:DependencyScopeEnumeration ;
+    skos:prefLabel "dependency scope" ;
+    skos:definition "Runtime, development, build, test or optional. Without it, a project's 20 runtime dependencies and its 200 test-only ones are one undifferentiated list, and any 'how heavy is this software' question is unanswerable." .
+
+pulse:resolvedVersion
+    a rdf:Property ;
+    rdfs:domain pulse:DependencyRelation ;
+    skos:prefLabel "resolved version" ;
+    skos:definition "The concrete version the SBOM resolved to, e.g. '2.31.0'." .
+
+pulse:versionConstraint
+    a rdf:Property ;
+    rdfs:domain pulse:DependencyRelation ;
+    skos:prefLabel "version constraint" ;
+    skos:definition "The constraint as declared in the manifest, e.g. '>=2.28,<3'. Distinct from the resolved version: the constraint is the maintainer's intent, the resolution is one outcome of it." .
+
+pulse:declaredIn
+    a rdf:Property ;
+    rdfs:domain pulse:DependencyRelation ;
+    skos:prefLabel "declared in" ;
+    skos:definition "The manifest that declared this dependency (pyproject.toml, package.json, Cargo.toml …). Locates the claim, and distinguishes a real dependency from one inherited via a lockfile." .
+
+pulse:isDirectDependency
+    a rdf:Property ;
+    rdfs:domain pulse:DependencyRelation ;
+    rdfs:range xsd:boolean ;
+    skos:prefLabel "is direct dependency" ;
+    skos:definition "Whether the repository declares this dependency itself, as opposed to acquiring it transitively. Counting transitive dependencies as if they were chosen misrepresents both effort and risk." .
+
+pulse:DependencyScopeEnumeration
+    a rdfs:Class ;
+    skos:prefLabel "Dependency Scope Enumeration" ;
+    skos:definition "The role a dependency plays in a project." .
+
+pulse:RuntimeDependency     a pulse:DependencyScopeEnumeration ; skos:prefLabel "runtime" .
+pulse:DevelopmentDependency a pulse:DependencyScopeEnumeration ; skos:prefLabel "development" .
+pulse:BuildDependency       a pulse:DependencyScopeEnumeration ; skos:prefLabel "build" .
+pulse:TestDependency        a pulse:DependencyScopeEnumeration ; skos:prefLabel "test" .
+pulse:OptionalDependency    a pulse:DependencyScopeEnumeration ; skos:prefLabel "optional" .
+
+
+# =========================================================================
+# 17. ORCID AFFILIATION TYPES — four of seven are missing
+#
+# ORCID v3.0 models SEVEN affiliation kinds, each its own endpoint:
+#   /employments  /educations  /qualifications  /invited-positions
+#   /distinctions  /memberships  /services
+#
+# PR #25's MembershipTypeEnumeration has three — Employment, Education,
+# SocietyMembership — so an extractor reading a full ORCID record has nowhere
+# to put a qualification, an invited position, a distinction or a service. They
+# collapse into "membership", which loses the distinction between "held a chair
+# at", "was awarded by" and "sat on a committee of" — three quite different
+# claims about a person's standing.
+#
+# Cheap to close: four enumeration members, no new class, no shape change.
+#
+# NB a naming collision to avoid: our §14 pulse:qualification is a PROPERTY
+# (the degree obtained, e.g. "PhD"), while ORCID's Qualification is an
+# affiliation TYPE (a credential granted by an organization). Both are needed
+# and they are not the same thing.
+# =========================================================================
+
+pulse:Qualification a pulse:MembershipTypeEnumeration ; skos:prefLabel "Qualification" ;
+    skos:definition "A credential or qualification granted by an organization (ORCID /qualifications). Distinct from Education, which is enrolment: one can hold a qualification from a body one never studied at." .
+pulse:InvitedPosition a pulse:MembershipTypeEnumeration ; skos:prefLabel "Invited Position" ;
+    skos:definition "An invited or honorary position (ORCID /invited-positions) — a visiting professorship, a chair. Not employment, but a strong affiliation signal, and often the one that connects a researcher to a second institution." .
+pulse:Distinction a pulse:MembershipTypeEnumeration ; skos:prefLabel "Distinction" ;
+    skos:definition "An award, prize or honour conferred by an organization (ORCID /distinctions). The relation is 'was recognised by', not 'worked at' — treating it as employment would fabricate an affiliation." .
+pulse:Service a pulse:MembershipTypeEnumeration ; skos:prefLabel "Service" ;
+    skos:definition "Service to an organization (ORCID /services) — committee work, editorial boards, reviewing. Community contribution rather than employment, and the main way senior researchers connect to bodies that never employed them." .
+
+# NOT proposed, deliberately, though ORCID exposes them:
+#   /peer-reviews       — peer-review activity would need its own class, and we
+#                         do not fetch it. Modelling it now would be modelling
+#                         ahead of the requirement.
+#   /research-resources — same.
+# Both are recorded in raw-source-coverage.md as known unmodelled ORCID
+# activities so the omission is a decision, not an oversight.
+
+
+# =========================================================================
+# 18. COMPATIBILITY — accept everything, and say where it came from
+#
+# This is the point of the raw profile, so it deserves to be stated as a
+# requirement rather than inferred: raw must accept whatever a source gives
+# us, keep conflicting answers side by side, and record for every value WHERE
+# it came from and WHEN it was queried. Five things currently stand in the way.
+# All five are verified against ontology-shapes-raw.ttl, 2026-07-31.
+#
+# ---------------------------------------------------------------------
+# (1) NINE OF ELEVEN RAW SHAPES ARE sh:closed true
+#
+#   sh:closed false : RawPersonShape, RawOrganizationShape
+#   sh:closed true  : RawPlatformProfileShape, RawOrganizationProfileShape,
+#                     RawRepositoryShape, RawArticleShape, RawMembershipShape,
+#                     CollectionShape, CommunityShape, FundingShape,
+#                     ExternalIdentifierShape
+#
+# The two anchor classes are open and everything that actually carries source
+# data is closed. That inverts the requirement. This file's own header says raw
+# exists for "full field-parity with GitHub/Hugging Face/Zenodo/ORCID" — but
+# those APIs add fields continuously, and under a closed shape every new field
+# is a validation error until the ontology ships a release. An extractor then
+# has two options, both bad: drop the field, or emit invalid data.
+#
+# ASK: make the raw node shapes sh:closed false. Canonical can stay closed —
+# that is where the discipline belongs, because canonical is a curated view.
+# Raw is the intake, and an intake that rejects unanticipated input is not an
+# intake. Closedness in raw buys tidiness at the cost of the profile's purpose.
+#
+# ---------------------------------------------------------------------
+# (2) SEVEN OF ELEVEN CANNOT SAY WHICH RUN PRODUCED THEM
+#
+#   has pulse:partOfRun : RawPersonShape, RawOrganizationShape,
+#                         RawRepositoryShape, RawArticleShape
+#   lacks it            : RawPlatformProfileShape, RawOrganizationProfileShape,
+#                         RawMembershipShape, CollectionShape, CommunityShape,
+#                         FundingShape, ExternalIdentifierShape
+#
+# PlatformProfile is the sharpest case: it is the node that exists specifically
+# to hold one platform's view of a person, and it cannot state which
+# ExtractionOutput produced it. Nor can a Membership, a Funding record or an
+# ExternalIdentifier — so "where did this affiliation come from, and when?"
+# is unanswerable for exactly the entities whose credibility depends on it.
+#
+# ASK: pulse:partOfRun on every raw node shape. It is one sh:property line per
+# shape and it is the backbone of the provenance profile.
+#
+# ---------------------------------------------------------------------
+# (3) CONFLICTING VALUES SURVIVE FOR PEOPLE, NOT FOR REPOSITORIES
+#
+# PlatformProfile solves this elegantly for Person and Organization: one
+# profile per platform, so GitHub's bio and ORCID's biography coexist without
+# either being wrong. Repository and Article have NO equivalent. One
+# schema:SoftwareSourceCode node carries GitHub, Zenodo and Hugging Face facts
+# together, with sh:maxCount 1 on much of it — so when GitHub's licence and
+# Zenodo's licence disagree, extraction must pick one. Choosing is a canonical
+# decision, and forcing it in raw is precisely what the raw/canonical split
+# exists to avoid.
+#
+# ASK: drop sh:maxCount 1 in the raw repository and article shapes wherever
+# two sources can legitimately disagree (licence, name, description, dates,
+# discipline), and let pulse:Observation below say which source said what. The
+# alternative — a per-source record node mirroring PlatformProfile — also works;
+# we have no preference, only that both answers survive.
+#
+# ---------------------------------------------------------------------
+# (4) PER-VALUE PROVENANCE NEEDS A FORM THAT TODAY'S TOOLS CAN READ
+#
+# The provenance profile records winner-links as RDF-star annotations, and its
+# own header notes that pySHACL has no RDF-star support and rdflib cannot parse
+# Turtle-star. We pin rdflib 6.3.2 and pyshacl 0.28.1, so we can neither emit
+# nor validate that form. pulse:Observation below is the same information as an
+# ordinary reified node: deliberately ISOMORPHIC to the RDF-star shape, same
+# predicate names, so a consumer can support either and a producer can emit
+# both. It is not a competing design; it is the interoperable encoding of the
+# one already chosen.
+#
+# ---------------------------------------------------------------------
+# (5) NOTHING SHOULD EVER BE SILENTLY DROPPED
+#
+# pulse:UnmappedField below is the escape hatch that makes "accept everything"
+# literally true: an extractor meeting a field with no term keeps it, with its
+# source and timestamp, instead of discarding it. It is what we do today with
+# gme-internal:, formalised so any extractor can do it — and it makes ontology
+# growth non-breaking, because promoting a field later is a rename, not a
+# re-extraction.
+# =========================================================================
+
+# --- per-value provenance, without RDF-star ------------------------------
+
+pulse:Observation
+    a rdfs:Class ;
+    skos:prefLabel "Observation" ;
+    skos:definition "One source's assertion of one value about one subject, at one point in time. The non-RDF-star encoding of the provenance profile's quoted-triple annotations: same predicates, ordinary triples, so pySHACL can validate it and rdflib can parse it today. Emit this, the RDF-star form, or both." .
+
+pulse:hasObservation
+    a rdf:Property ;
+    rdfs:range pulse:Observation ;
+    skos:prefLabel "has observation" ;
+    skos:definition "Links any entity to an observation about it. Unbounded: the same property observed from three sources is three observations, which is the point." .
+
+pulse:observedSubject
+    a rdf:Property ;
+    rdfs:domain pulse:Observation ;
+    skos:prefLabel "observed subject" ;
+    skos:definition "The entity the observation is about — the subject of the quoted triple in the RDF-star form." .
+
+pulse:observedProperty
+    a rdf:Property ;
+    rdfs:domain pulse:Observation ;
+    skos:prefLabel "observed property" ;
+    skos:definition "The property whose value was observed — the predicate of the quoted triple." .
+
+pulse:observedValue
+    a rdf:Property ;
+    rdfs:domain pulse:Observation ;
+    skos:prefLabel "observed value" ;
+    skos:definition "The value observed — the object of the quoted triple. Literal or IRI." .
+
+pulse:retrievedFrom
+    a rdf:Property ;
+    rdfs:domain pulse:Observation ;
+    skos:prefLabel "retrieved from" ;
+    skos:definition "The endpoint the value came from, as specifically as possible — 'https://pub.orcid.org/v3.0/0000-0002-1825-0097/employments', not just 'ORCID'. prov:wasDerivedFrom names the ExtractionOutput; this names the actual request, which is what makes a value auditable and re-fetchable." .
+
+pulse:retrievedAt
+    a rdf:Property ;
+    rdfs:domain pulse:Observation ;
+    rdfs:range xsd:dateTime ;
+    skos:prefLabel "retrieved at" ;
+    skos:definition "When the query that produced this value was executed. Distinct from pulse:observedOn (when the value was recorded) and from schema:dateModified (when the upstream resource changed): a stars count retrieved in January is not wrong in June, it is stale, and only the query time can tell you which." .
+
+pulse:sourceQuery
+    a rdf:Property ;
+    rdfs:domain pulse:Observation ;
+    skos:prefLabel "source query" ;
+    skos:definition "The query or parameters used, when the endpoint alone does not identify the request — a search string, a GraphQL document, a SPARQL query. Without it, a value derived from a search cannot be reproduced." .
+
+pulse:sourcePlatform
+    a rdf:Property ;
+    rdfs:domain pulse:Observation ;
+    # Range is YOUR class, declared in ontology-enumerations-canonical.ttl —
+    # not re-declared here. Same for the MembershipType / IdentifierScheme /
+    # PublicationType enumerations this file adds members to.
+    rdfs:range pulse:PlatformEnumeration ;
+    skos:prefLabel "source platform" ;
+    skos:definition "The platform the value came from, as an enumeration member — the coarse filter consumers actually use ('show me only ROR-sourced affiliations'). Requires the platform enumeration to cover our real sources; see ask #4." .
+
+# The provenance profile's existing annotation properties apply unchanged to
+# an Observation node — pulse:observationKind, observationConfidence,
+# observedOn, firstObservedOn, lastConfirmedOn, observationCount. That is what
+# "isomorphic" means here: no second vocabulary to learn, and a SPARQL query
+# differs only in whether it matches << s p o >> or an Observation node.
+
+# --- the escape hatch: never drop anything -------------------------------
+
+pulse:UnmappedField
+    a rdfs:Class ;
+    skos:prefLabel "Unmapped Field" ;
+    skos:definition "A source field with no term in this ontology, preserved verbatim rather than discarded. Makes ontology growth non-breaking: a field captured today as unmapped becomes a first-class property later without re-extracting anything, and an extractor never has to choose between dropping data and emitting invalid data." .
+
+pulse:hasUnmappedField
+    a rdf:Property ;
+    rdfs:range pulse:UnmappedField ;
+    skos:prefLabel "has unmapped field" ;
+    skos:definition "Links an entity to a source field that has no term yet." .
+
+pulse:sourceFieldName
+    a rdf:Property ;
+    rdfs:domain pulse:UnmappedField ;
+    skos:prefLabel "source field name" ;
+    skos:definition "The field's name at the source, verbatim — 'community_health_percentage', 'crisrp.name.variant'. Keeping the upstream spelling is what makes the value traceable back to the API that produced it." .
+
+pulse:rawValue
+    a rdf:Property ;
+    rdfs:domain pulse:UnmappedField ;
+    skos:prefLabel "raw value" ;
+    skos:definition "The value as received, unconverted. A literal — including a JSON string for structured values, since inventing a shape for data the ontology does not model would defeat the purpose." .
+
+
+# =========================================================================
+# 19. deps.dev — the package layer already exists, and it joins on our IRIs
+#
+# The rete catalog ships deps.dev (Google Open Source Insights) as
+# 2,555,320,067 triples across 8 federated shards. Verified live 2026-07-31
+# against https://data.graphplaza.com/deps-dev/deps-dev-pypi.rete:
+#
+#   9,221,041  deps:PackageVersion
+#     431,715  deps:Project
+#      23,795  deps:Advisory
+#
+# THE JOIN IS FREE. deps:Project's own comment reads "A source repository /
+# project a package is built from (e.g. a GitHub repo). Instance IRI = the
+# repository URL." That is GME's Repository @id. Querying that shard for
+#
+#   ?pv deps:hasProject <https://github.com/psf/requests> ; deps:purl ?purl
+#
+# returns pkg:pypi/requests@2.23.0 and its resolved dependencies
+# (certifi, chardet, idna, urllib3), plus republished forks. No mapping table,
+# no owl:sameAs — the same repository IRI we mint is the key.
+#
+# So §1's package layer is not something we need to build; it is something we
+# need to ALIGN to. Everything below is an alignment axiom, plus the one
+# concept deps.dev has that we have no term for at all: security advisories.
+#
+# One modelling nuance to get right: deps.dev is VERSION-LEVEL. Its node is a
+# PackageVersion and its join key deps:purl carries the version
+# ("pkg:pypi/requests@2.23.0"). Our pulse:Package is therefore version-level
+# too, which is worth stating explicitly — "requests" and "requests 2.23.0"
+# are different subjects, and only the second one has dependencies.
+# =========================================================================
+
+pulse:Package            rdfs:subClassOf    deps:PackageVersion .
+pulse:packageIdentifier  rdfs:subPropertyOf deps:purl .        # both purl; the cross-registry key
+pulse:packageEcosystem   rdfs:subPropertyOf deps:system .      # NPM GO MAVEN PYPI CARGO NUGET RUBYGEMS
+pulse:packageRegistry    rdfs:subPropertyOf deps:registry .
+pulse:dependsOnPackage   rdfs:subPropertyOf deps:dependsOn .   # resolved + version-pinned, depth 1
+pulse:packageDependencyOf rdfs:subPropertyOf deps:dependencyOf .
+pulse:sourceRepository   rdfs:subPropertyOf deps:hasProject .  # target IRI = the repository URL
+
+pulse:isRelease
+    a rdf:Property ;
+    rdfs:domain pulse:Package ;
+    rdfs:range xsd:boolean ;
+    rdfs:subPropertyOf deps:isRelease ;
+    skos:prefLabel "is release" ;
+    skos:definition "Whether this is a stable release rather than a pre-release. The cheapest way to answer 'what is the current version of this software' without version-string parsing, which is unreliable across seven ecosystems." .
+
+# --- security advisories: we have no term for these ---------------------
+# 23,795 advisories in the PyPI shard alone, attached to the package versions
+# they affect, sourced from GHSA / OSV / NSWG. §3 proposes a SecurityScoreBadge
+# — a self-reported summary — while this is the underlying fact, from an
+# authority, joined to a version. For research software, "does this depend on
+# something with a known vulnerability" is a question people actually ask, and
+# nothing in either profile can express it.
+
+pulse:Advisory
+    a rdfs:Class ;
+    rdfs:subClassOf deps:Advisory ;
+    skos:prefLabel "Advisory" ;
+    skos:definition "A security advisory affecting one or more package versions. Identified by its source URL (a GHSA or OSV record)." .
+
+pulse:hasAdvisory
+    a rdf:Property ;
+    rdfs:domain pulse:Package ;
+    rdfs:range pulse:Advisory ;
+    rdfs:subPropertyOf deps:hasAdvisory ;
+    skos:prefLabel "has advisory" ;
+    skos:definition "A security advisory affecting this package version." .
+
+pulse:advisoryAffects
+    a rdf:Property ;
+    rdfs:domain pulse:Advisory ;
+    rdfs:range pulse:Package ;
+    rdfs:subPropertyOf deps:affects ;
+    skos:prefLabel "advisory affects" ;
+    skos:definition "The package versions this advisory affects." .
+
+pulse:advisorySource
+    a rdf:Property ;
+    rdfs:domain pulse:Advisory ;
+    rdfs:subPropertyOf deps:advisorySource ;
+    skos:prefLabel "advisory source" ;
+    skos:definition "The database that issued it — GHSA, OSV, NSWG. Provenance matters here: severity is assessed differently by different issuers." .
+
+pulse:advisorySeverity
+    a rdf:Property ;
+    rdfs:domain pulse:Advisory ;
+    rdfs:subPropertyOf deps:severity ;
+    skos:prefLabel "advisory severity" ;
+    skos:definition "The severity as stated by the issuing database. Kept as issued rather than normalised — the scales differ, and flattening them would invent a comparability that is not there." .
+
+# NOT proposed, though deps.dev carries them: deps:slsaVerified and
+# deps:slsaSourceRepository (build provenance), deps:ossFuzzLineCoverCount,
+# deps:versionOrdinal. All available if wanted; left out because we do not
+# consume them today and supply-chain attestation is a different axis from
+# research-software description. Recorded so the omission is a choice.
+
+
+# =========================================================================
+# 20. PROJECT — canonical has it, raw does not
+#
+# Yes, the ontology has a project concept. It is only on one side:
+#
+#   ontology-definitions-canonical.ttl  schema:Project ("A collaborative
+#                                       research endeavor with a particular
+#                                       aim, typically time-bounded and
+#                                       funded"), pulse:projectOutput
+#   ontology-shapes-canonical.ttl       pulse:ProjectShape (sh:closed) —
+#                                       name, description, url, projectOutput
+#                                       (repo | article), schema:member,
+#                                       sourceOrganization, funder,
+#                                       hasBeginning/hasEnd
+#   ontology-shapes-raw.ttl             NOTHING. Zero occurrences of "project".
+#
+# This is the same defect as the missing RawContributionShape (see
+# ontology-shapes-raw.additions.ttl): canonical expects projects to exist, the
+# extractor profile has no shape to emit them, so nothing can legally produce
+# one. And we hold project-shaped data today:
+#
+#   SNSF     providers/snsf_grants.py returns grant_number, title, state,
+#            start/end dates, and we already mint grant IRIs via
+#            snsf_grant_iri() — so we have identified projects we cannot emit
+#   ORCID    /fundings (the endpoint we do not yet call)
+#   CORDIS   EU projects — scholar:Project ⊑ foaf:Project in the rete hub,
+#            unifying s66:Project and oaire:Project
+#   Infoscience  DSpace-CRIS ships a `crispj` project schema, noted in
+#            dev/rete/epfl-infoscience.ttl's header
+#
+# Three gaps, in order of how much they cost us.
+# =========================================================================
+
+# --- (a) the raw shape. Proposed in ontology-shapes-raw.additions.ttl. -----
+
+# --- (b) Funding and Project are not connected ---------------------------
+# pulse:Funding is "a grant or funding award held directly by a Person …
+# distinct from schema:Project's funder relationship" — a good distinction,
+# but the two classes have no property between them. So an ORCID funding
+# record and the CORDIS project it paid for cannot be joined, even when both
+# are in the graph and carry the same award number.
+
+pulse:fundsProject
+    a rdf:Property ;
+    # pulse:Funding is YOUR class (ontology-definitions-raw.ttl), not
+    # re-declared here — as with pulse:PlatformEnumeration in §18.
+    rdfs:domain pulse:Funding ;
+    rdfs:range schema:Project ;
+    owl:inverseOf pulse:fundedBy ;
+    skos:prefLabel "funds project" ;
+    skos:definition "Links a Funding record to the Project it supports. Without it, the person-side view of an award (ORCID) and the project-side view (CORDIS, SNSF) stay in separate components of the graph." .
+
+pulse:fundedBy
+    a rdf:Property ;
+    rdfs:domain schema:Project ;
+    rdfs:range pulse:Funding ;
+    skos:prefLabel "funded by" ;
+    skos:definition "The funding awards supporting this project." .
+
+# --- (c) no award number anywhere ----------------------------------------
+# ProjectShape is closed and has no identifier property beyond schema:name and
+# url, and FundingShape offers only hasExternalIdentifier — whose scheme
+# enumeration has no grant scheme. So "SNSF grant 200021_192356" or an EU
+# grant agreement number has nowhere to live, and grant numbers are how
+# funders, institutions and publications all refer to a project.
+# Infoscience models it directly as infs:awardNumber.
+
+pulse:awardNumber
+    a rdf:Property ;
+    # Verified from frapo.ttl and vivo.owl directly. frapo:hasGrantNumber has
+    # domain frapo:Grant and is ⊑ dcterms:identifier with NO rdfs:range
+    # declared — so no datatype clash (a secondary source claiming
+    # xsd:decimal is wrong). vivo:sponsorAwardId is "the ID of the grant as
+    # assigned by the funding organization", the closest semantic match there
+    # is; it is functional, so assert it only where one number is certain.
+    rdfs:subPropertyOf frapo:hasGrantNumber , vivo:sponsorAwardId ;
+    rdfs:seeAlso <https://www.openaire.eu/schema/repo-lit/4.0/oaire.xsd> ;
+    rdfs:comment "Corresponds to the XML element oaire:awardNumber in the OpenAIRE Guidelines for Literature Repositories v4. That is an XSD element, not an RDF property, so the correspondence is documentary only — no formal alignment is possible." ;
+    skos:prefLabel "award number" ;
+    skos:definition "The funder's own identifier for a grant or project — an SNSF grant number, an EU grant agreement number, an NSF award id (infs:awardNumber). The join key between a funder's records, an institution's CRIS and the acknowledgements printed in papers." ;
+    gme:mapsFrom "_infoscience_code" .
+
+# --- (d) OpenAIRE already models all of this -----------------------------
+# Projects are indeed an OpenAIRE concept, and the rete hub says so:
+# scholar.ttl:236  oaire:Project ⊑ scholar:Project
+# scholar.ttl:238  oaire:Funding ⊑ scholar:Grant
+# alongside s66:Project (CORDIS/EURIO) and s66:Grant. So schema:Project ⊑
+# foaf:Project above puts our projects in the same hub as OpenAIRE's and
+# CORDIS's — one query spans all three.
+#
+# It matters more than a nice-to-have because EPFL's own CRIS already speaks
+# OpenAIRE: dev/rete/epfl-infoscience.ttl maps DSpace's `oaire` schema to
+# OpenAIRE and `oairecerif` to OpenAIRE CERIF 1.1, and several infs: terms are
+# subproperties of oairecerif fields (affiliation role and dates, acronym,
+# event place, patent country). Aligning to OpenAIRE is therefore also
+# aligning to Infoscience, for free.
+#
+# VERIFIED against the official XSD (https://www.openaire.eu/schema/repo-lit/4.0/
+# oaire.xsd) 2026-08-06. The real structure, correcting an earlier draft here:
+#
+#   oaire:fundingReferences                  (plural container — was omitted)
+#   └── oaire:fundingReference
+#       ├── oaire:funderName                 (required)
+#       ├── oaire:funderIdentifier           @funderIdentifierType required
+#       │                                    enum v4.0: ISNI | GRID |
+#       │                                    Crossref Funder ID | Other;
+#       │                                    4.1-SNAPSHOT adds ROR
+#       ├── oaire:fundingStream
+#       ├── oaire:awardNumber                @awardURI is an ATTRIBUTE of this,
+#       │                                    not a sibling element
+#       └── oaire:awardTitle
+#
+# Note the funderIdentifierType enum adding ROR in 4.1 — the same conclusion
+# ask #4 reaches from the other direction.
+#
+# NO RDF ALIGNMENT IS POSSIBLE. Three independent findings:
+#   1. oaire.xsd declares its terms only as xs:element / xs:attribute /
+#      xs:simpleType — zero rdf: in the body (an unused xmlns:rdf sits in the
+#      header). An xs:element is not an rdf:Property, so rdfs:subPropertyOf
+#      over one asserts nothing.
+#   2. namespace.openaire.eu is NXDOMAIN from Google Public DNS — the
+#      namespace IRI is not dereferenceable anywhere, not just from our
+#      network.
+#   3. OpenAIRE's LOD service (lod.openaire.eu) was switched off on
+#      2023-05-08 and is not being revived; the CRIS Managers guidelines are
+#      CERIF XML, not RDF, so they are no escape hatch either.
+# The same holds for DataCite: FundingReference is defined in XML and JSON
+# only. So the OpenAIRE relationship is recorded below as rdfs:seeAlso and
+# prose — a non-logical annotation — never as a subPropertyOf axiom.
+#
+# ALSO CORRECTED: info:eu-repo/grantAgreement is LEGACY. The form is right —
+#   info:eu-repo/grantAgreement/{Funder}/{FundingProgramme}/{ProjectID}
+#                              [/{Jurisdiction}/{ProjectName}/{ProjectAcronym}]
+# (3-part mandatory, 6-part recommended, e.g. .../EC/FP7/244909/EU/Making
+# Capabilities Work/WorkAble) — but it is a v3 construct carried in
+# dc:relation, and the v4 Guidelines state the fundingReference block
+# "replaces the info:eu-repo/grantAgreement syntax". Primary project identity
+# in v4 is funderName + funderIdentifier + awardNumber + awardURI. We keep the
+# string as a compatibility identifier, not as the primary one, because
+# repositories still deposit it and OpenAIRE still parses it.
+
+pulse:grantAgreementIdentifier
+    a rdf:Property ;
+    rdfs:subPropertyOf frapo:hasProjectIdentifier ;
+    rdfs:seeAlso <https://guidelines.openaire.eu/en/latest/literature/field_projectid.html> ;
+    skos:prefLabel "grant agreement identifier" ;
+    skos:definition "A project identifier in OpenAIRE's legacy info:eu-repo/grantAgreement/{Funder}/{FundingProgramme}/{ProjectID} form. Kept whole rather than split because repositories deposit it verbatim — Zenodo and Infoscience records carry these strings. A COMPATIBILITY identifier: OpenAIRE Guidelines v4 supersede it with the fundingReference block, so do not treat it as primary project identity." .
+
+pulse:fundingProgramme
+    a rdf:Property ;
+    # No rdfs:subPropertyOf: FRAPO declares the class frapo:FundingProgramme
+    # but no property whose range is it, and schema:FundingScheme is a
+    # subclass of Organization — it models a funding BODY, not a programme,
+    # so aligning to it would be wrong. Constrained by range instead.
+    rdfs:range frapo:FundingProgramme ;
+    skos:prefLabel "funding programme" ;
+    skos:definition "The funder's programme or stream that awarded the grant — H2020, Horizon Europe, an SNSF instrument (oaire:fundingStream). The level at which research funding is actually analysed, and absent from both profiles. For EU programmes the values SHOULD be SKOS concepts from the Publications Office authority table, e.g. http://publications.europa.eu/resource/authority/eu-programme/H2020 — verified live, so the values need no minting either." .
+
+# --- (e) award title and URI: nothing to mint ----------------------------
+# FRAPO has no award-title and no award-URI property. Use dcterms:title on the
+# grant, and make the grant itself an IRI (or use schema:url) rather than
+# inventing pulse: terms for either. Recorded so the absence is not mistaken
+# for an oversight.
+
+# --- alignment to the rete hub -------------------------------------------
+# scholar:Project ⊑ foaf:Project unifies s66:Project (CORDIS/EURIO) and
+# oaire:Project; scholar:Grant ⊑ frapo:Grant unifies oaire:Funding,
+# orcid:Funding and cx:Funding. Two axioms put our projects and funding in the
+# same hub, so an EU project and a GME-extracted project answer one query.
+
+schema:Project  rdfs:subClassOf foaf:Project .
+pulse:Funding   rdfs:subClassOf scholar:Grant .
+
+
+# =========================================================================
+# 21. ecosyste.ms — a second package/project source, and it joins the same way
+#
+# Researched 2026-08-06. Open API platform (code AGPL-3, data CC-BY-SA-4.0):
+# 14.4m packages / 109 registries, 293m repos / ~1.95k hosts, 33.6k advisories,
+# 889m commits, GitHub Sponsors and Open Collective money flows. OpenAPI 3.0.1
+# per service at https://<svc>.ecosyste.ms/docs/api/v1/openapi.yaml.
+#
+# IDENTITY — it joins exactly like deps.dev. ecosyste.ms has a Project concept
+# distinct from Repository and Package, and its identity is THE SOURCE
+# REPOSITORY URL: /projects/lookup?url=https://github.com/numpy/numpy resolves.
+# So a third source merges into our Repository node with no new IRI scheme.
+# Two caveats worth writing down before anyone builds on it:
+#   - its host key is the display name "GitHub", not "github.com" as deps.dev
+#     uses, so bridging the two needs a normalisation shim (plus owner/repo
+#     case-folding);
+#   - its numeric ids are service-local — a repo is id 1068937 in `repos` but
+#     its summary Project is id 365143. Never mint IRIs from those.
+#
+# It also puts a purl on REPOSITORIES — pkg:github/{owner}/{repo} — which
+# deps.dev does not. That makes purl a single join key across both the package
+# and the repository layer.
+#
+# CORROBORATION of choices already made here, from an independent design:
+#   - its Dependency carries `direct` (bool), `kind` (scope), `requirements`
+#     (the constraint string) and the manifest `filepath` — the same four
+#     facts as §16's isDirectDependency / dependencyScope / versionConstraint /
+#     declaredIn. Two systems converging on the same qualified relation is
+#     good evidence the plain edge was the wrong model.
+#   - its Repository exposes total_bot_commits / total_bot_committers,
+#     matching §9's pulse:isBotIdentity.
+#   - its Committer carries an `emails` ARRAY and resolves one committer across
+#     repositories — the multi-identity problem §9 exists for, treated the same
+#     way. (Note it exposes addresses in the clear; our §9 position is
+#     unchanged — hash the local part, keep the domain.)
+#   - OpenSSF Scorecard is structured data on the Repository, not a badge —
+#     worth preferring over §3's SecurityScoreBadge when both are available.
+#
+# THE RDF SURFACE: /codemeta. ecosyste.ms publishes no ontology, no SPARQL and
+# no @context of its own, but it emits CodeMeta 3.0 JSON-LD per package and
+# per version (@context https://w3id.org/codemeta/3.0, @type
+# schema:SoftwareSourceCode). Verified fields include codeRepository,
+# issueTracker, downloadUrl, softwareHelp, applicationCategory,
+# runtimePlatform, developmentStatus, maintainer, copyrightHolder, funder.
+# CodeMeta is the community standard for software metadata and is
+# schema.org-based, so it is the natural alignment target for our
+# repository-level terms — more so than anything we would mint.
+# VERIFIED 2026-08-07: https://w3id.org/codemeta/3.0 returns HTTP 200 and its
+# @context declares the codemeta-specific terms — continuousIntegration,
+# buildInstructions, developmentStatus, readme, issueTracker — under the
+# namespace https://codemeta.github.io/terms/. So the alignments below are
+# asserted, not deferred. (Everything else in CodeMeta 3.0 is schema.org.)
+# =========================================================================
+
+# --- CodeMeta alignment, and two terms it shows we are missing -----------
+
+pulse:issueTracker
+    a rdf:Property ;
+    rdfs:domain schema:SoftwareSourceCode ;
+    rdfs:subPropertyOf codemeta:issueTracker ;
+    skos:prefLabel "issue tracker" ;
+    skos:definition "The repository's issue tracker. §3's pulse:hasIssues says whether one is enabled; this says where it is — which is what a reader needs in order to report a problem, and the two are not the same fact." .
+
+pulse:developmentStatus
+    a rdf:Property ;
+    rdfs:domain schema:SoftwareSourceCode ;
+    rdfs:subPropertyOf codemeta:developmentStatus ;
+    skos:prefLabel "development status" ;
+    skos:definition "The project's lifecycle status. CodeMeta's convention is a repostatus.org term (concept, wip, active, inactive, unsupported, moved, abandoned). Neither profile can express it, yet 'is this maintained?' is the first question asked of research software — and pulse:archived only catches the case where someone remembered to archive." .
+
+pulse:continuousIntegrationUrl
+    a rdf:Property ;
+    rdfs:domain schema:SoftwareSourceCode ;
+    rdfs:subPropertyOf codemeta:continuousIntegration ;
+    skos:prefLabel "continuous integration URL" ;
+    skos:definition "A link to the project's CI service. Note the deliberate split from §3's pulse:hasContinuousIntegration, which is a boolean we derive from the presence of a workflow file: CodeMeta models the LINK, we also want the derived signal, and collapsing them would lose one or the other." .
+
+# The repository README already has a term upstream — pulse:readme in
+# ontology-definitions-raw.ttl. Proposed alignment, one axiom:
+pulse:readme rdfs:subPropertyOf codemeta:readme .
+
+pulse:fundingLink
+    a rdf:Property ;
+    skos:prefLabel "funding link" ;
+    skos:definition "A resolved funding-platform page for a repository, package or owner — Open Collective, GitHub Sponsors, Tidelift, Ko-fi, a donation page. Distinct from §3's pulse:fundingConfig, which is the FUNDING.yml FILE: the config is where the claim is written, this is where the money goes. Distinct again from pulse:Funding, which is a research grant — sponsorship and grant funding are different economies and conflating them makes both unqueryable." ;
+    gme:mapsFrom "_funding_urls" .
+
+pulse:developmentDistributionScore
+    a rdf:Property ;
+    rdfs:domain schema:SoftwareSourceCode ;
+    rdfs:range xsd:decimal ;
+    skos:prefLabel "development distribution score" ;
+    skos:definition "The DDS (bus-factor proxy): how concentrated a repository's commits are among few committers. ecosyste.ms computes it per repository. For research software sustainability this is among the most predictive single numbers available — a 0.9 DDS says one departure ends the project — and neither profile has anywhere to put it." .
+
+pulse:epssScore
+    a rdf:Property ;
+    rdfs:domain pulse:Advisory ;
+    rdfs:range xsd:decimal ;
+    skos:prefLabel "EPSS score" ;
+    skos:definition "Exploit Prediction Scoring System probability for an advisory (ecosyste.ms epss_percentage). Severity says how bad exploitation would be; EPSS estimates how likely it is — the two answer different questions, and triage needs both." .
+
+# NOT proposed though ecosyste.ms has them: blast_radius and
+# related_advisories (advisory-side aggregates we would be re-deriving),
+# issue/PR analytics, and the Dependabot index. Out of scope for describing
+# research software; recorded so the omission is a choice.
+#
+# DIVISION OF LABOUR, if both sources are wired: take resolved transitive
+# dependency graphs from deps.dev (it precomputes them per version with each
+# ecosystem's real resolver; ecosyste.ms stores only declared manifest
+# requirements and resolves on demand), and take from ecosyste.ms the three
+# layers deps.dev has nothing for — funding, people/commits, and scholarly
+# linkage (its `papers` service carries DOI and openalex_id; `science` carries
+# readme_doi_urls, works and citation counts). Its ~1.95k forges also cover
+# self-hosted GitLab and Codeberg, which matters for institutional
+# repositories that deps.dev's GitHub/GitLab/Bitbucket does not reach.
+
+
+# =========================================================================
+# 22. schema.org is spelled two different ways across these ontologies
+#
+# Found while verifying every external IRI (verification.md). The prefix
+# declarations, verbatim:
+#
+#   ontology-definitions-raw.ttl        @prefix schema: <http://schema.org/>
+#   ontology-shapes-raw.ttl             @prefix schema: <http://schema.org/>
+#   ontology-definitions-canonical.ttl  @prefix schema: <http://schema.org/>
+#   dev/rete/epfl-infoscience.ttl       @prefix schema: <https://schema.org/>
+#
+# In RDF those are DIFFERENT IRIs. http://schema.org/Person and
+# https://schema.org/Person are two unrelated terms as far as any reasoner or
+# triple store is concerned — nothing relates them unless someone says so.
+#
+# The consequence is precise and it defeats the point of the alignment work:
+# infs:Person ⊑ https://schema.org/Person and pulse:PersonShape targeting
+# http://schema.org/Person do NOT unify in a union graph. An EPFL Infoscience
+# person and an Open Pulse person stay in separate components, and a query
+# over one finds none of the other — silently, with no error anywhere.
+#
+# ASK: pick one spelling across the ecosystem. schema.org itself canonicalises
+# on https:// today, but Open Pulse already uses http:// in three files and
+# consistency matters more than which one wins. If both must coexist, the fix
+# is explicit bridges (owl:equivalentClass / owl:equivalentProperty per term),
+# not silence.
+#
+# This proposal uses http://schema.org/ throughout, matching Open Pulse.
+# =========================================================================
+
+
+# =========================================================================
+# 10. SHACL FRAGMENTS
+#
+# Where the above would attach, as sh:property blocks to merge into the
+# corresponding shapes rather than as standalone NodeShapes (adding a second
+# sh:targetClass shape for schema:SoftwareSourceCode would fight the closed
+# raw/canonical repository shapes, exactly as your raw shapes file warns).
+# =========================================================================
+
+pulse:ProposedPackageShape
+    a sh:NodeShape ;
+    sh:targetClass pulse:Package ;
+    sh:closed true ;
+    sh:ignoredProperties ( rdf:type owl:sameAs ) ;
+    sh:property [ sh:path pulse:packageIdentifier ; sh:datatype xsd:string ; sh:minCount 1 ; sh:maxCount 1 ; sh:name "Package Identifier" ] ;
+    sh:property [ sh:path pulse:packageEcosystem ; sh:class pulse:PackageEcosystemEnumeration ; sh:maxCount 1 ; sh:name "Ecosystem" ] ;
+    sh:property [ sh:path pulse:packageVersion ; sh:datatype xsd:string ; sh:maxCount 1 ; sh:name "Version" ] ;
+    sh:property [ sh:path pulse:packageRegistry ; sh:datatype xsd:string ; sh:maxCount 1 ; sh:name "Registry" ] ;
+    sh:property [ sh:path schema:name ; sh:datatype xsd:string ; sh:maxCount 1 ; sh:name "Name" ] ;
+    sh:property [ sh:path pulse:sourceRepository ; sh:class schema:SoftwareSourceCode ; sh:maxCount 1 ; sh:name "Source Repository" ] ;
+    sh:property [ sh:path pulse:packageDependencyOf ; sh:class schema:SoftwareSourceCode ; sh:name "Package Dependency Of" ] ;
+    sh:property [ sh:path pulse:partOfRun ; sh:class pulse:ExtractionOutput ; sh:maxCount 1 ; sh:name "Part Of Run" ] .
+
+pulse:ProposedContainerImageShape
+    a sh:NodeShape ;
+    sh:targetClass pulse:ContainerImage ;
+    sh:closed true ;
+    sh:ignoredProperties ( rdf:type owl:sameAs ) ;
+    sh:property [ sh:path pulse:imageReference ; sh:datatype xsd:string ; sh:minCount 1 ; sh:maxCount 1 ; sh:name "Image Reference" ] ;
+    sh:property [ sh:path schema:url ; sh:nodeKind sh:IRI ; sh:maxCount 1 ; sh:name "Registry Page" ] ;
+    sh:property [ sh:path pulse:platform ; sh:class pulse:PlatformEnumeration ; sh:maxCount 1 ; sh:name "Platform" ] ;
+    sh:property [ sh:path pulse:partOfRun ; sh:class pulse:ExtractionOutput ; sh:maxCount 1 ; sh:name "Part Of Run" ] .
+
+# --- to merge into RawRepositoryShape (and the canonical RepositoryShape
+#     where the property is not extraction-specific) ----------------------
+#
+#   sh:property [ sh:path pulse:distributedAs ; sh:class pulse:Package ] ;
+#   sh:property [ sh:path pulse:dependsOnPackage ; sh:class pulse:Package ] ;
+#   sh:property [ sh:path pulse:publishesImage ; sh:class pulse:ContainerImage ] ;
+#   sh:property [ sh:path pulse:referencesImage ; sh:class pulse:ContainerImage ] ;
+#   sh:property [ sh:path pulse:composeManifest ; sh:nodeKind sh:IRI ] ;
+#   sh:property [ sh:path pulse:hasContinuousIntegration ; sh:datatype xsd:boolean ; sh:maxCount 1 ] ;
+#   sh:property [ sh:path pulse:testCoverage ; sh:datatype xsd:decimal ; sh:maxCount 1 ] ;
+#   sh:property [ sh:path pulse:communityHealthScore ; sh:datatype xsd:integer ; sh:maxCount 1 ] ;
+#   sh:property [ sh:path pulse:badgeCount ; sh:datatype xsd:integer ; sh:maxCount 1 ] ;
+#   sh:property [ sh:path pulse:hasBadge ; sh:class pulse:Badge ] ;            # §16, replaces pulse:badge
+#   sh:property [ sh:path pulse:hasDependency ; sh:class pulse:DependencyRelation ] ;  # §16
+#   sh:property [ sh:path pulse:hasIssues ; sh:datatype xsd:boolean ; sh:maxCount 1 ] ;
+#   sh:property [ sh:path pulse:hasProjects ; sh:datatype xsd:boolean ; sh:maxCount 1 ] ;
+#   sh:property [ sh:path pulse:hasIssueTemplate ; sh:datatype xsd:boolean ; sh:maxCount 1 ] ;
+#   sh:property [ sh:path pulse:hasPullRequestTemplate ; sh:datatype xsd:boolean ; sh:maxCount 1 ] ;
+#   sh:property [ sh:path pulse:contributingGuide ; sh:nodeKind sh:IRI ] ;
+#   sh:property [ sh:path pulse:documentationUrl ; sh:nodeKind sh:IRI ] ;
+#   sh:property [ sh:path pulse:sizeInBytes ; sh:datatype xsd:integer ; sh:maxCount 1 ] ;
+#   sh:property [ sh:path pulse:forkNetworkCount ; sh:datatype xsd:integer ; sh:maxCount 1 ] ;
+#   sh:property [ sh:path pulse:archivedDate ; sh:datatype xsd:dateTime ; sh:maxCount 1 ] ;
+#   sh:property [ sh:path pulse:primaryProgrammingLanguage ; sh:datatype xsd:string ; sh:maxCount 1 ] ;
+#   sh:property [ sh:path skos:altLabel ; sh:datatype xsd:string ] ;
+#
+# --- to merge into RawPlatformProfileShape ------------------------------
+#
+#   sh:property [ sh:path pulse:profileReadme ; sh:nodeKind sh:IRI ; sh:maxCount 1 ] ;
+#   sh:property [ sh:path skos:altLabel ; sh:datatype xsd:string ] ;
+#
+# --- to merge into the ORGANIZATION shapes (see §15: registry facts belong
+#     on the organization, because its @id already IS the ROR) -------------
+#
+#   sh:property [ sh:path pulse:establishedYear ; sh:datatype xsd:gYear ; sh:maxCount 1 ] ;
+#   sh:property [ sh:path pulse:registryStatus ; sh:datatype xsd:string ; sh:maxCount 1 ] ;
+#   sh:property [ sh:path pulse:acronym ; sh:datatype xsd:string ] ;
+#   sh:property [ sh:path pulse:unitCode ; sh:datatype xsd:string ] ;
+#   sh:property [ sh:path pulse:orgUnitLevel ; sh:datatype xsd:string ; sh:maxCount 1 ] ;
+#   sh:property [ sh:path pulse:hasExternalIdentifier ; sh:class pulse:ExternalIdentifier ] ;
+#   sh:property [ sh:path skos:altLabel ; sh:datatype xsd:string ] ;
+#
+#   Only if you take the §15 fallback instead:
+#   sh:property [ sh:path pulse:hasRegistryRecord ; sh:class pulse:RegistryRecord ] ;
+#
+# --- to merge into ContributionShape (Section 9) -------------------------
+#
+#   sh:property [ sh:path pulse:hasGitIdentity ; sh:class pulse:GitIdentity ] ;
+#
+# and, on the existing gitAuthorName / gitAuthorEmail property shapes there,
+# either remove them in favour of the GitIdentity node or drop their
+# sh:maxCount 1 — as they stand, an extractor with five observed identities
+# must discard four of them.
+#
+# --- to merge into RawPersonShape / PersonShape --------------------------
+#
+#   sh:property [ sh:path pulse:hasGitIdentity ; sh:class pulse:GitIdentity ] .

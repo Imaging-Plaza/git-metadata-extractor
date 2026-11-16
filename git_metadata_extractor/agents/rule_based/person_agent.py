@@ -1,20 +1,25 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import re
 from copy import deepcopy
 from typing import Any
 
-from git_metadata_extractor.canonicalization.github import github_repo_iri, github_user_iri
-from git_metadata_extractor.canonicalization.infoscience import infoscience_person_iri
-from git_metadata_extractor.canonicalization.orcid import orcid_iri
 from git_metadata_extractor.agents.models import (
     AgentResult,
     ProviderSet,
     generate_uuid,
     validate_permissive,
 )
-from git_metadata_extractor.providers.base import ProviderNotFoundError
+from git_metadata_extractor.canonicalization.github import (
+    github_repo_iri,
+    github_user_iri,
+)
+from git_metadata_extractor.canonicalization.infoscience import infoscience_person_iri
+from git_metadata_extractor.canonicalization.orcid import orcid_iri
+from git_metadata_extractor.mapping import map_fields
+from git_metadata_extractor.providers.base import ProviderError, ProviderNotFoundError
 
 HASH_LENGTH = 12
 HASHED_LOCAL_PART_PATTERN = re.compile(r"^[0-9a-f]{12}$|^[0-9a-f]{64}$", re.IGNORECASE)
@@ -279,15 +284,19 @@ class PersonAgentV2:
         providers: ProviderSet,
     ) -> AgentResult:
         warnings: list[str] = []
+        unavailable_providers: list[str] = []
         username = _resolve_username(context)
-        github_user = providers.github.get_user(username)
+        # Provider methods are synchronous; keep their I/O off the event loop
+        # so the orchestrator's bounded fan-out and cancellation can run.
+        github_user = await asyncio.to_thread(providers.github.get_user, username)
 
         # Profile README (`<user>/<user>`'s README) — the richest free-text
         # self-description GitHub exposes for a user. Fetched directly
         # alongside the user profile; stamped as internal `_profile_readme`.
         person_profile_readme: str | None = None
         try:
-            _profile_readme = providers.github.get_profile_readme(
+            _profile_readme = await asyncio.to_thread(
+                providers.github.get_profile_readme,
                 username,
                 is_organization=False,
             )
@@ -304,7 +313,9 @@ class PersonAgentV2:
 
         if providers.orcid and orcid_identifier_hint:
             try:
-                orcid_record = providers.orcid.get_person_by_orcid(orcid_identifier_hint)
+                orcid_record = await asyncio.to_thread(
+                    providers.orcid.get_person_by_orcid, orcid_identifier_hint,
+                )
             except (ProviderNotFoundError, ValueError) as exc:
                 warnings.append(f"ORCID lookup failed: {exc}")
         elif not providers.orcid:
@@ -317,25 +328,32 @@ class PersonAgentV2:
                 or github_user.get("name")
                 or username
             )
-            infoscience_results = providers.infoscience.search_person(str(search_query))
-            # Acceptance is gated on ORCID equality or name-token overlap
-            # against the GitHub profile name; without that, an opaque
-            # github handle ("3C111", "gabyx") would resolve to whichever
-            # person Infoscience scores highest for that string, dragging
-            # phantom affiliations along. See `_pick_best_infoscience_match`
-            # for the rule.
-            candidate_name = github_user.get("name") or context.get("person_query")
-            infoscience_match = _pick_best_infoscience_match(
-                infoscience_results,
-                candidate_name=candidate_name if isinstance(candidate_name, str) else None,
-                candidate_orcid=orcid_identifier_hint,
-            )
-            if infoscience_results and infoscience_match is None:
-                warnings.append(
-                    f"Infoscience search returned {len(infoscience_results)} hits for "
-                    f"{search_query!r} but none confirmed by ORCID or name overlap; "
-                    "skipping enrichment to avoid phantom affiliations.",
+            try:
+                infoscience_results = await asyncio.to_thread(
+                    providers.infoscience.search_person, str(search_query),
                 )
+            except ProviderError as exc:
+                warnings.append(f"Infoscience person enrichment failed: {exc}")
+                unavailable_providers.append("infoscience")
+            else:
+                # Acceptance is gated on ORCID equality or name-token overlap
+                # against the GitHub profile name; without that, an opaque
+                # github handle ("3C111", "gabyx") would resolve to whichever
+                # person Infoscience scores highest for that string, dragging
+                # phantom affiliations along. See `_pick_best_infoscience_match`
+                # for the rule.
+                candidate_name = github_user.get("name") or context.get("person_query")
+                infoscience_match = _pick_best_infoscience_match(
+                    infoscience_results,
+                    candidate_name=candidate_name if isinstance(candidate_name, str) else None,
+                    candidate_orcid=orcid_identifier_hint,
+                )
+                if infoscience_results and infoscience_match is None:
+                    warnings.append(
+                        f"Infoscience search returned {len(infoscience_results)} hits for "
+                        f"{search_query!r} but none confirmed by ORCID or name overlap; "
+                        "skipping enrichment to avoid phantom affiliations.",
+                    )
         else:
             warnings.append("Infoscience provider not configured for person enrichment")
 
@@ -365,7 +383,9 @@ class PersonAgentV2:
                 affiliation_hints.append(github_user["company"])
             orcid_search_hits: Any = []
             try:
-                orcid_search_hits = providers.orcid.search_persons(str(discovery_name))
+                orcid_search_hits = await asyncio.to_thread(
+                    providers.orcid.search_persons, str(discovery_name),
+                )
             except (ProviderNotFoundError, ValueError) as exc:
                 warnings.append(f"ORCID discovery search failed: {exc}")
             discovered_hit = _pick_best_orcid_search_hit(
@@ -384,7 +404,8 @@ class PersonAgentV2:
                 )
                 if orcid_record is None:
                     try:
-                        orcid_record = providers.orcid.get_person_by_orcid(
+                        orcid_record = await asyncio.to_thread(
+                            providers.orcid.get_person_by_orcid,
                             discovered_orcid,
                         )
                     except (ProviderNotFoundError, ValueError) as exc:
@@ -464,41 +485,40 @@ class PersonAgentV2:
             context.get("email") or github_user.get("email"),
         )
 
-        payload = {
-            "id": resolved_id,
-            "type": "schema:Person",
-            "shacl": "pulse:PersonShape",
-            "identifiers": {
-                "pulse:orcid": normalized_orcid,
-                "pulse:infosciencePersonIdentifier": infoscience_id,
-                "pulse:githubUsername": github_username,
-                "uuid": uuid_value,
-            },
-            "idSource": id_source,
-            "schema:name": (
-                (orcid_record or {}).get("name")
+        payload = map_fields(
+            "agent.person",
+            {
+                "id": resolved_id,
+                "identifiers_pulse_orcid": normalized_orcid,
+                "identifiers_pulse_infosciencePersonIdentifier": infoscience_id,
+                "identifiers_pulse_githubUsername": github_username,
+                "identifiers_uuid": uuid_value,
+                "idSource": id_source,
+                "name": (orcid_record or {}).get("name")
                 or (infoscience_match or {}).get("name")
                 or github_user.get("name")
-                or username
-            ),
-            "schema:url": _person_schema_url(
-                infoscience_match=infoscience_match,
-                github_html_url=github_user.get("html_url"),
-                resolved_id=resolved_id,
-            ),
-            "pulse:githubUsername": github_username,
-            "pulse:orcidIdentifier": normalized_orcid,
-            "pulse:infosciencePersonIdentifier": infoscience_id,
-            "org:hasMembership": membership_ids,
-            "pulse:hasContribution": _deduplicate_preserve_order(
-                [
-                    contribution
-                    for contribution in context.get("contributions", [])
-                    if isinstance(contribution, str)
-                ] if isinstance(context.get("contributions"), list) else [],
-            ),
-            "pulse:owns": repository_ownership,
-        }
+                or username,
+                "url": _person_schema_url(
+                    infoscience_match=infoscience_match,
+                    github_html_url=github_user.get("html_url"),
+                    resolved_id=resolved_id,
+                ),
+                "githubUsername": github_username,
+                "orcidIdentifier": normalized_orcid,
+                "infosciencePersonIdentifier": infoscience_id,
+                "hasMembership": membership_ids,
+                "hasContribution": _deduplicate_preserve_order(
+                    [
+                        contribution
+                        for contribution in context.get("contributions", [])
+                        if isinstance(contribution, str)
+                    ]
+                    if isinstance(context.get("contributions"), list)
+                    else [],
+                ),
+                "owns": repository_ownership,
+            },
+        )
         if email is not None:
             payload["schema:email"] = email
 
@@ -507,51 +527,20 @@ class PersonAgentV2:
         # JSON-LD output). Lets the LLM refiners + downstream consumers
         # see the rich GitHub / ORCID profile without losing the data
         # to validation. ORCID profile fields are also surfaced here.
-        github_profile_fields = {
-            "_avatar_url":         github_user.get("avatar_url"),
-            "_html_url":           github_user.get("html_url"),
-            "_blog":               github_user.get("blog"),
-            "_bio":                github_user.get("bio"),
-            "_company":            github_user.get("company"),
-            "_location":           github_user.get("location"),
-            "_twitter_username":   github_user.get("twitter_username"),
-            "_public_repos":       github_user.get("public_repos"),
-            "_followers_count":    github_user.get("followers"),
-            "_following_count":    github_user.get("following"),
-            "_github_created_at":  github_user.get("created_at"),
-            "_github_updated_at":  github_user.get("updated_at"),
-            "_github_account_type": github_user.get("type"),
-            "_hireable":           github_user.get("hireable"),
-            "_profile_readme":     person_profile_readme,
-        }
+        github_profile_fields = map_fields(
+            "github.person", {**github_user, "profile_readme": person_profile_readme},
+        )
         for key, value in github_profile_fields.items():
             if value not in (None, "", []):
                 payload[key] = value
 
         # ORCID record extras (when the person was matched to an ORCID).
         if isinstance(orcid_record, dict):
-            for orcid_key, payload_key in (
-                ("biography",        "_orcid_biography"),
-                ("country",          "_orcid_country"),
-                ("keywords",         "_orcid_keywords"),
-                ("researcher_urls",  "_orcid_researcher_urls"),
-                ("other_names",      "_orcid_other_names"),
-                ("external_identifiers", "_orcid_external_identifiers"),
-            ):
-                value = orcid_record.get(orcid_key)
-                if value not in (None, "", []):
-                    payload[payload_key] = value
+            payload.update(map_fields("orcid.person", orcid_record))
 
         # Infoscience profile extras (when matched).
         if isinstance(infoscience_match, dict):
-            for info_key, payload_key in (
-                ("infoscience_url",  "_infoscience_url"),
-                ("position",         "_infoscience_position"),
-                ("employment_status", "_infoscience_employment_status"),
-            ):
-                value = infoscience_match.get(info_key)
-                if value not in (None, "", []):
-                    payload[payload_key] = value
+            payload.update(map_fields("infoscience.person", infoscience_match))
 
         overrides = context.get("agent_overrides")
         if isinstance(overrides, dict):
@@ -606,5 +595,5 @@ class PersonAgentV2:
             data=validated_payload,
             warnings=warnings,
             raw_output=raw_output,
-            stats={"derivation": derivation_stats},
+            stats={"derivation": derivation_stats, "unavailable_providers": unavailable_providers},
         )

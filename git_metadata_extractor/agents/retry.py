@@ -5,6 +5,11 @@ from copy import deepcopy
 from typing import Any, Awaitable, Callable, cast
 
 from git_metadata_extractor.agents.models import AgentResult, ProviderSet
+from git_metadata_extractor.observation.evidence import (
+    activity,
+    get_trace,
+    observe_providers,
+)
 
 VALIDATION_WARNING_PREFIX = "Validation warning at"
 
@@ -62,6 +67,29 @@ async def _maybe_await(value: Any) -> Any:
     return value
 
 
+async def _run_attempt(
+    runner: Any,
+    context: dict[str, Any],
+    providers: ProviderSet | None,
+    is_invalid: InvalidResultChecker,
+) -> tuple[AgentResult, str | None]:
+    name = getattr(runner, "__qualname__", type(runner).__name__)
+    runtime = str(context.get("agent_runtime", ""))
+    kind = "llm" if runtime == "llm" or "LLM" in name else "rule_based"
+    with activity(name, kind=kind) as invocation:
+        candidate = await _maybe_await(runner(context, providers))
+        result = _normalize_result(candidate)
+        invalid_reason = is_invalid(result)
+        if invocation is not None and invalid_reason is not None:
+            invocation["status"] = "rejected"
+        trace = get_trace()
+        if trace is not None and invalid_reason is None:
+            trace.observe(result.data)
+        if invocation is not None and result.model:
+            invocation.update(model=result.model, provider=result.provider)
+    return result, invalid_reason
+
+
 async def with_retry(  # noqa: C901, PLR0913
     agent: Any,
     *,
@@ -79,6 +107,7 @@ async def with_retry(  # noqa: C901, PLR0913
         raise ValueError
 
     runner = _resolve_runner(agent)
+    providers = observe_providers(providers)
     sleep = sleep_func or asyncio.sleep
     is_invalid = invalid_result_checker or _default_invalid_reason
 
@@ -93,14 +122,12 @@ async def with_retry(  # noqa: C901, PLR0913
     for attempt_index in range(attempt_count):
         try:
             attempt_context = deepcopy(context or {})
-            candidate = await _maybe_await(runner(attempt_context, providers))
-            result = _normalize_result(candidate)
+            result, invalid_reason = await _run_attempt(runner, attempt_context, providers, is_invalid)
             last_result = result
 
             for warning in result.warnings:
                 _append_unique(warnings, warning)
 
-            invalid_reason = is_invalid(result)
             if invalid_reason is None:
                 result.stats = {
                     **result.stats,

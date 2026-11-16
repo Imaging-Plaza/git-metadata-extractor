@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from copy import deepcopy
-from dataclasses import dataclass, field
 from typing import Any
+
+from pydantic import Field
 
 from git_metadata_extractor.agents.models import (
     AgentResult,
@@ -10,40 +10,23 @@ from git_metadata_extractor.agents.models import (
     infer_entity_bucket,
     normalize_entity_bucket_key,
 )
+from git_metadata_extractor.models import InternalModel
 
 
-@dataclass(slots=True)
-class AgentGroup:
+class AgentGroup(InternalModel):
     name: str
-    agent_keys: list[str] = field(default_factory=list)
-    parallelizable: bool = True
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "name": self.name,
-            "agent_keys": list(self.agent_keys),
-            "parallelizable": self.parallelizable,
-        }
+    agent_keys: list[str] = Field(default_factory=list)
 
 
-@dataclass(slots=True)
-class Stage:
+class Stage(InternalModel):
     name: str
-    groups: list[AgentGroup] = field(default_factory=list)
-    depends_on: list[str] = field(default_factory=list)
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "name": self.name,
-            "groups": [group.to_dict() for group in self.groups],
-            "depends_on": list(self.depends_on),
-        }
+    groups: list[AgentGroup] = Field(default_factory=list)
+    depends_on: list[str] = Field(default_factory=list)
 
 
-@dataclass(slots=True)
-class ExecutionPlan:
+class ExecutionPlan(InternalModel):
     detected_type: str
-    stages: list[Stage] = field(default_factory=list)
+    stages: list[Stage] = Field(default_factory=list)
 
     def has_circular_dependencies(self) -> bool:
         stage_map = {stage.name: stage for stage in self.stages}
@@ -70,22 +53,14 @@ class ExecutionPlan:
 
         return any(_visit(stage.name) for stage in self.stages)
 
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "detected_type": self.detected_type,
-            "stages": [stage.to_dict() for stage in self.stages],
-            "has_cycle": self.has_circular_dependencies(),
-        }
 
-
-@dataclass(slots=True)
-class PipelineResult:
-    stages_completed: list[str] = field(default_factory=list)
-    agent_results: dict[str, AgentResult] = field(default_factory=dict)
-    typed_entity_buckets: TypedEntityBuckets = field(default_factory=TypedEntityBuckets)
-    gathered_context: dict[str, Any] = field(default_factory=dict)
-    warnings: list[str] = field(default_factory=list)
-    errors: list[str] = field(default_factory=list)
+class PipelineResult(InternalModel):
+    stages_completed: list[str] = Field(default_factory=list)
+    agent_results: dict[str, AgentResult] = Field(default_factory=dict)
+    typed_entity_buckets: TypedEntityBuckets = Field(default_factory=TypedEntityBuckets)
+    gathered_context: dict[str, Any] = Field(default_factory=dict)
+    warnings: list[str] = Field(default_factory=list)
+    errors: list[str] = Field(default_factory=list)
     duration_ms: int = 0
 
     def resolved_typed_entity_buckets(self) -> TypedEntityBuckets:
@@ -113,28 +88,6 @@ class PipelineResult:
         return resolved
 
     def to_dict(self) -> dict[str, Any]:
-        serialized_results: dict[str, dict[str, Any]] = {}
-        for key, result in self.agent_results.items():
-            serialized_results[key] = {
-                "data": result.data,
-                "warnings": list(result.warnings),
-                "raw_output": result.raw_output,
-                "is_partial": result.is_partial,
-                "failure_reason": result.failure_reason,
-                "model": result.model,
-                "provider": result.provider,
-                "tokens_prompt": result.tokens_prompt,
-                "tokens_completion": result.tokens_completion,
-                "stats": dict(result.stats),
-            }
-
-        typed_entity_buckets = self.resolved_typed_entity_buckets().to_dict()
-        return {
-            "stages_completed": list(self.stages_completed),
-            "agent_results": serialized_results,
-            "typed_entity_buckets": typed_entity_buckets,
-            "gathered_context": deepcopy(self.gathered_context),
-            "warnings": list(self.warnings),
-            "errors": list(self.errors),
-            "duration_ms": self.duration_ms,
+        return self.model_dump() | {
+            "typed_entity_buckets": self.resolved_typed_entity_buckets().to_dict(),
         }

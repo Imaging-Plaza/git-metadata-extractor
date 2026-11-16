@@ -24,7 +24,6 @@ import asyncio
 import json
 import logging
 from copy import deepcopy
-from dataclasses import dataclass
 from time import perf_counter
 from typing import TYPE_CHECKING, Any, Awaitable, Callable, Literal
 from urllib.parse import urlparse
@@ -36,17 +35,27 @@ from git_metadata_extractor.agents.llm.membership import LLMMembershipAgentV2
 from git_metadata_extractor.agents.llm.organization import LLMOrganizationAgentV2
 from git_metadata_extractor.agents.llm.person import LLMPersonAgentV2
 from git_metadata_extractor.agents.llm.repository import LLMRepositoryAgentV2
-from git_metadata_extractor.agents.models import AgentResult, TypedEntityBuckets, infer_entity_bucket
-from git_metadata_extractor.canonicalization.string_utils import normalize_string, strip_accents
+from git_metadata_extractor.agents.models import (
+    AgentResult,
+    TypedEntityBuckets,
+    infer_entity_bucket,
+)
+from git_metadata_extractor.canonicalization.string_utils import (
+    normalize_string,
+    strip_accents,
+)
 from git_metadata_extractor.dependencies import _default_provider_set
-from git_metadata_extractor.providers.detection.github_url_classifier import classify_github_url
-from git_metadata_extractor.schema import load_jsonld_context
+from git_metadata_extractor.models import InternalModel
 from git_metadata_extractor.pipeline.stages import (
     AssembledOutput,
     build_jsonld_output,
     gather_context,
     reconcile_entities,
 )
+from git_metadata_extractor.providers.detection.github_url_classifier import (
+    classify_github_url,
+)
+from git_metadata_extractor.schema import load_jsonld_context
 
 if TYPE_CHECKING:
     from git_metadata_extractor.agents.models import ProviderSet
@@ -64,8 +73,7 @@ _STAGE_CONTRIBUTION_AGENT = "contribution_agent"
 _HTTP_SCHEMES = {"http", "https"}
 
 
-@dataclass(slots=True)
-class _ExecutionOutcome:
+class _ExecutionOutcome(InternalModel):
     subject: str
     status: Literal["ok", "timeout", "error"]
     elapsed_seconds: float

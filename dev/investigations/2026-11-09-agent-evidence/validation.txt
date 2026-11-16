@@ -1,0 +1,57 @@
+Validation — 2026-11-09
+
+Branch: feat/agent-evidence-provenance (local, uncommitted changes)
+Base: 442e921a910379d9a24af3fca72bddac4f72ede5
+Workspace: D:/pro/git-metadata-extractor-provenance
+
+Files changed
+-------------
+New observation/evidence.py: trace, sanitized retrieval metadata, activity scopes,
+field assertions, checked citations, cache packets, provider/tool adapters.
+observation/query_log.py: request-scoped trace and attempted-query history.
+agents/retry.py: per-attempt agent identity and rejected-attempt attribution.
+agents/llm/runtime.py: model/provider recording, observed tools, citation tools.
+agents/llm/_verdict_cache.py and providers/cache.py: retained origin evidence and
+explicit cache-hit metadata.
+pipeline/orchestrator.py, runner.py, run.py and stages/refine_with_llm.py:
+context, stage, refiner, final-document and substrate persistence integration.
+pipeline/stages/source_attribution.py: accurate cross-reference to evidence.
+api/extract.py and api_models/contracts.py: provenance response and cache version.
+tests/v2/test_agent_evidence.py and test_api_extract_stub.py: regressions.
+This directory: implementation plan, usage/semantics reference and validation.
+
+Commands and results
+--------------------
+Docker image: gme-local-validation:20261109
+Source bind-mounted at /work/gme; all test containers used --network none.
+
+python -m pytest tests/v2/ -q -n 4 --dist=loadfile
+  -m "not live_provider and not llm_integration"
+  --no-cov -p no:cacheprovider --tb=short
+Result: 1811 passed, 1 skipped, 2468 warnings in 33.34 seconds.
+Warnings include existing RDF/pyparsing and dependency deprecations.
+Full output: D:/pro/git-metadata-extractor/.staging/evidence-full-final.txt
+
+python -m ruff check git_metadata_extractor/observation/evidence.py
+  tests/v2/test_agent_evidence.py --ignore EXE002 --output-format concise
+Result: All checks passed. EXE002 is ignored because Windows bind mounts expose
+Python files as executable in the Linux validation container. This is a scoped
+lint check, not a claim that the repository's pre-existing lint debt is clean.
+
+git diff --check
+Result: passed, no output.
+
+Red/green cycles covered the new behavior before implementation, including the
+real Pydantic AI function-model/tool protocol, citation acceptance/rejection,
+API/store transport, invalid attempts, cached query scoping and async callables.
+Independent read-only reviewer reproduced and verified every reported fix;
+final assessment: no remaining blocking findings within the review scope.
+
+Limits / follow-ups
+-------------------
+No live remote-LLM benchmark or GIMIE extraction was run for this change.
+Checked citations prove exact value presence in a successful response, not
+semantic correctness. Uncited matches remain labelled candidates. Arbitrary
+transformations are attributed to their stage rather than reverse-engineered.
+Existing Robin deployment/unifier issues and the separate article fix remain
+outside this change. No push, merge, secret-file change or service deployment.

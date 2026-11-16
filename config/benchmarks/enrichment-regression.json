@@ -1,0 +1,233 @@
+{
+  "cases": [
+    {
+      "id": "sdsc-ordes--gimie",
+      "source_url": "https://github.com/sdsc-ordes/gimie",
+      "expected_facts": [
+        {
+          "subject": "https://github.com/sdsc-ordes/gimie",
+          "predicate": "@type",
+          "value": "schema:SoftwareSourceCode"
+        },
+        {
+          "subject": "https://github.com/sdsc-ordes/gimie",
+          "predicate": "schema:name",
+          "value": "gimie"
+        },
+        {
+          "subject": "https://github.com/sdsc-ordes/gimie",
+          "predicate": "pulse:repositoryHandle",
+          "value": "sdsc-ordes/gimie"
+        }
+      ]
+    },
+    {
+      "id": "ethz-adrl--control-toolbox",
+      "source_url": "https://github.com/ethz-adrl/control-toolbox",
+      "expected_facts": [
+        {
+          "subject": "https://github.com/ethz-adrl/control-toolbox",
+          "predicate": "@type",
+          "value": "schema:SoftwareSourceCode"
+        },
+        {
+          "subject": "https://github.com/ethz-adrl/control-toolbox",
+          "predicate": "schema:name",
+          "value": "control-toolbox"
+        },
+        {
+          "subject": "https://github.com/ethz-adrl/control-toolbox",
+          "predicate": "pulse:repositoryHandle",
+          "value": "ethz-adrl/control-toolbox"
+        },
+        {
+          "subject": "https://github.com/ethz-adrl/control-toolbox",
+          "predicate": "schema:citation",
+          "value": "https://arxiv.org/abs/1801.04290"
+        }
+      ]
+    },
+    {
+      "id": "martibosch--lausanne-heat-islands",
+      "source_url": "https://github.com/martibosch/lausanne-heat-islands",
+      "expected_facts": [
+        {
+          "subject": "https://github.com/martibosch/lausanne-heat-islands",
+          "predicate": "@type",
+          "value": "schema:SoftwareSourceCode"
+        },
+        {
+          "subject": "https://github.com/martibosch/lausanne-heat-islands",
+          "predicate": "schema:name",
+          "value": "lausanne-heat-islands"
+        },
+        {
+          "subject": "https://github.com/martibosch/lausanne-heat-islands",
+          "predicate": "pulse:repositoryHandle",
+          "value": "martibosch/lausanne-heat-islands"
+        },
+        {
+          "subject": "https://github.com/martibosch/lausanne-heat-islands",
+          "predicate": "schema:citation",
+          "value": "https://doi.org/10.5194/gmd-14-3521-2021"
+        }
+      ]
+    },
+    {
+      "id": "astropy--astropy",
+      "source_url": "https://github.com/astropy/astropy",
+      "expected_facts": [
+        {
+          "subject": "https://github.com/astropy/astropy",
+          "predicate": "@type",
+          "value": "schema:SoftwareSourceCode"
+        },
+        {
+          "subject": "https://github.com/astropy/astropy",
+          "predicate": "schema:name",
+          "value": "astropy"
+        },
+        {
+          "subject": "https://github.com/astropy/astropy",
+          "predicate": "pulse:repositoryHandle",
+          "value": "astropy/astropy"
+        },
+        {
+          "subject": "https://github.com/astropy/astropy",
+          "predicate": "schema:citation",
+          "value": "https://doi.org/10.3847/1538-4357/ac7c74"
+        }
+      ]
+    },
+    {
+      "id": "scipy--scipy",
+      "source_url": "https://github.com/scipy/scipy",
+      "expected_facts": [
+        {
+          "subject": "https://github.com/scipy/scipy",
+          "predicate": "@type",
+          "value": "schema:SoftwareSourceCode"
+        },
+        {
+          "subject": "https://github.com/scipy/scipy",
+          "predicate": "schema:name",
+          "value": "scipy"
+        },
+        {
+          "subject": "https://github.com/scipy/scipy",
+          "predicate": "pulse:repositoryHandle",
+          "value": "scipy/scipy"
+        },
+        {
+          "subject": "https://github.com/scipy/scipy",
+          "predicate": "schema:citation",
+          "value": "https://doi.org/10.1038/s41592-019-0686-2"
+        }
+      ]
+    },
+    {
+      "id": "antsx--ants",
+      "source_url": "https://github.com/ANTsX/ANTs",
+      "expected_facts": [
+        {
+          "subject": "https://github.com/ANTsX/ANTs",
+          "predicate": "@type",
+          "value": "schema:SoftwareSourceCode"
+        },
+        {
+          "subject": "https://github.com/ANTsX/ANTs",
+          "predicate": "schema:name",
+          "value": "ANTs"
+        },
+        {
+          "subject": "https://github.com/ANTsX/ANTs",
+          "predicate": "pulse:repositoryHandle",
+          "value": "ANTsX/ANTs"
+        },
+        {
+          "subject": "https://github.com/ANTsX/ANTs",
+          "predicate": "schema:citation",
+          "value": "https://doi.org/10.1038/s41598-021-87564-6"
+        },
+        {
+          "subject": "https://github.com/ANTsX/ANTs",
+          "predicate": "pulse:ownedBy",
+          "value": "https://github.com/ANTsX"
+        }
+      ]
+    },
+    {
+      "id": "cbfinn--maml",
+      "source_url": "https://github.com/cbfinn/maml",
+      "expected_facts": [
+        {
+          "subject": "https://github.com/cbfinn/maml",
+          "predicate": "@type",
+          "value": "schema:SoftwareSourceCode"
+        },
+        {
+          "subject": "https://github.com/cbfinn/maml",
+          "predicate": "schema:name",
+          "value": "maml"
+        },
+        {
+          "subject": "https://github.com/cbfinn/maml",
+          "predicate": "pulse:repositoryHandle",
+          "value": "cbfinn/maml"
+        },
+        {
+          "subject": "https://github.com/cbfinn/maml",
+          "predicate": "schema:citation",
+          "value": "https://arxiv.org/abs/1703.03400"
+        }
+      ]
+    },
+    {
+      "id": "cheng-zhao--fcfc",
+      "source_url": "https://github.com/cheng-zhao/FCFC",
+      "expected_facts": [
+        {
+          "subject": "https://github.com/cheng-zhao/FCFC",
+          "predicate": "@type",
+          "value": "schema:SoftwareSourceCode"
+        },
+        {
+          "subject": "https://github.com/cheng-zhao/FCFC",
+          "predicate": "schema:name",
+          "value": "FCFC"
+        },
+        {
+          "subject": "https://github.com/cheng-zhao/FCFC",
+          "predicate": "pulse:repositoryHandle",
+          "value": "cheng-zhao/FCFC"
+        },
+        {
+          "subject": "https://github.com/cheng-zhao/FCFC",
+          "predicate": "schema:citation",
+          "value": "https://doi.org/10.1051/0004-6361/202346015"
+        }
+      ]
+    },
+    {
+      "id": "torvalds--linux",
+      "source_url": "https://github.com/torvalds/linux",
+      "expected_facts": [
+        {
+          "subject": "https://github.com/torvalds/linux",
+          "predicate": "@type",
+          "value": "schema:SoftwareSourceCode"
+        },
+        {
+          "subject": "https://github.com/torvalds/linux",
+          "predicate": "schema:name",
+          "value": "linux"
+        },
+        {
+          "subject": "https://github.com/torvalds/linux",
+          "predicate": "pulse:repositoryHandle",
+          "value": "torvalds/linux"
+        }
+      ]
+    }
+  ]
+}

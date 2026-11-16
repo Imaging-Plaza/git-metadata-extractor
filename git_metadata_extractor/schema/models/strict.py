@@ -5,7 +5,7 @@
 # - contribution.schema.json: 39db27096c58d615240bb69152a84eba68ac503fd9f2000d16ee045305f2ef38
 # - membership.schema.json: c3c9b9e8743bb3e4f199b998cffc9ddf481ce787a7de8f45db6317217581c20d
 # - organization.schema.json: 1ff36af461ea9e065b851b044b95bb522421f204c7d2c6ab7a165eb8b582a40f
-# - person.schema.json: 6e9ab7b6108718a12dcbd912f158b0d0d3c9278a76755c7c39e57bb7a180133c
+# - person.schema.json: b20e03341139eddf76d146f6f989349bac7f790ba015656b5b8376ff6f26ee2e
 # - repository.schema.json: a201620dbbabf7a1963c5d6ea902d198c1383edc177901c9fe3ae44166f3fe16
 #
 
@@ -63,7 +63,7 @@ class PersonModel1(BaseModel):
     idSource: IdSource
     schema_name: str = Field(..., alias="schema:name", min_length=1)
     schema_email: str | None = Field(
-        None, alias="schema:email", pattern="^[\\w\\-\\.]+@([\\w-]+\\.)+[\\w-]{2,4}$"
+        None, alias="schema:email", pattern="^[\\w\\-\\.\\+]+@([\\w-]+\\.)+[\\w-]{2,}$"
     )
     schema_url: AnyUrl | None = Field(None, alias="schema:url")
     pulse_githubUsername: str = Field(
@@ -100,7 +100,7 @@ class PersonModel2(BaseModel):
     idSource: IdSource
     schema_name: str = Field(..., alias="schema:name", min_length=1)
     schema_email: str = Field(
-        ..., alias="schema:email", pattern="^[\\w\\-\\.]+@([\\w-]+\\.)+[\\w-]{2,4}$"
+        ..., alias="schema:email", pattern="^[\\w\\-\\.\\+]+@([\\w-]+\\.)+[\\w-]{2,}$"
     )
     schema_url: AnyUrl | None = Field(None, alias="schema:url")
     pulse_githubUsername: str | None = Field(
@@ -137,7 +137,7 @@ class PersonModel3(BaseModel):
     idSource: IdSource
     schema_name: str = Field(..., alias="schema:name", min_length=1)
     schema_email: str | None = Field(
-        None, alias="schema:email", pattern="^[\\w\\-\\.]+@([\\w-]+\\.)+[\\w-]{2,4}$"
+        None, alias="schema:email", pattern="^[\\w\\-\\.\\+]+@([\\w-]+\\.)+[\\w-]{2,}$"
     )
     schema_url: AnyUrl | None = Field(None, alias="schema:url")
     pulse_githubUsername: str | None = Field(
@@ -174,7 +174,7 @@ class PersonModel4(BaseModel):
     idSource: IdSource
     schema_name: str = Field(..., alias="schema:name", min_length=1)
     schema_email: str | None = Field(
-        None, alias="schema:email", pattern="^[\\w\\-\\.]+@([\\w-]+\\.)+[\\w-]{2,4}$"
+        None, alias="schema:email", pattern="^[\\w\\-\\.\\+]+@([\\w-]+\\.)+[\\w-]{2,}$"
     )
     schema_url: AnyUrl | None = Field(None, alias="schema:url")
     pulse_githubUsername: str | None = Field(

@@ -21,12 +21,7 @@
       "pulse:githubOrgFollowers": 200000,
       "org:hasUnit": [],
       "org:unitOf": [],
-      "pulse:owns": null,
-      "_aliases": [
-        "github"
-      ],
-      "_acronyms": [],
-      "_labels": []
+      "pulse:owns": null
     },
     "related_entities": [],
     "entities_by_type": {
@@ -51,12 +46,7 @@
           "pulse:githubOrgFollowers": 200000,
           "org:hasUnit": [],
           "org:unitOf": [],
-          "pulse:owns": null,
-          "_aliases": [
-            "github"
-          ],
-          "_acronyms": [],
-          "_labels": []
+          "pulse:owns": null
         }
       ],
       "articles": [],

@@ -6,8 +6,16 @@ The v2 pipeline turns a GitHub URL into a JSON-LD graph aligned with [Open Pulse
 
 > **Two sequencers, not one.** Agent generation runs from a per-input-type
 > plan in the orchestrator (`PLAN_BY_TYPE`); everything after the agents is a
-> flat sequence in `api/extract.py`. The stage inventory below reflects both —
+> set of ordered chains in `pipeline/run.py`, executed by
+> `services/extraction.py`. The stage inventory below reflects both —
 > see [Stage inventory](#stage-inventory).
+
+Field mapping is a separate concern from stage order. Source adapters prepare
+facts; per-source/entity YAML maps rule-based agent payloads and raw/canonical
+projections. Shared YAML policies cover source routing, classification and
+unifier merging. Fetching, matching and graph algorithms remain Python. See
+[Source-to-ontology mappings](architecture/overview.md#source-to-ontology-mappings)
+for the workflow and the single detailed editing guide.
 
 ---
 
@@ -91,7 +99,7 @@ The diagram is deliberately simplified. `classify_url` runs in the API layer *be
 
 ## Stage inventory
 
-Reconstructed from `PLAN_BY_TYPE`, the `# === <name> stage ===` banners in `api/extract.py` and the `STAGE_*` constants in `api/_helpers.py` (2026-07-29). When in doubt, those three are the source of truth.
+Reconstructed from `PLAN_BY_TYPE` and the ordered stage chains in `pipeline/run.py` (2026-07-29). When in doubt, those two are the source of truth: each post-agent stage's name is the `Stage(name=...)` literal in its chain.
 
 ### Phase 1 — agent generation (orchestrator)
 
@@ -119,7 +127,7 @@ Fan-out is capped: `V2_MAX_REPO_FANOUT_ORG` (25) and `V2_MAX_REPO_FANOUT_USER` (
 | `reconcile_entities` | ID canonicalisation + linkage; anonymises emails |
 | `resolve_company_to_ror` | `_company` → ROR: Membership + Org stub |
 | `resolve_bio_to_ror` | bio / blog / email → ROR: Membership + Org stub |
-| `resolve_bio_to_ror_llm` **[LLM]** | LLM long-tail affiliation resolver |
+| `resolve_bio_to_ror_llm` **[LLM/hybrid]** | LLM long-tail affiliation resolver |
 | `resolve_placeholder_orgs_to_ror` | upgrade placeholder Orgs to real ROR entities |
 | `llm_critic` **[LLM, off by default]** | drop suggestions |
 | `refine_with_llm` **[hybrid]** | whitelisted-field patches over rule-based output |
@@ -141,9 +149,21 @@ Fan-out is capped: `V2_MAX_REPO_FANOUT_ORG` (25) and `V2_MAX_REPO_FANOUT_USER` (
 | `infer_article_source_organization` | attribute articles to a source organisation |
 | `concept_tagging` **[off by default]** | EPFL Graph concepts / keywords / disciplines onto the root repo |
 | `tag_rule_based_disciplines` | deterministic discipline fallback |
-| `build_jsonld_output` | final JSON-LD `@graph`; strips redundant `pulse:ror` |
+| `build_jsonld_output` | v2-shaped JSON-LD `@graph`; strips redundant `pulse:ror`. Since the v3 flip this is an *intermediate*, not the response |
+| `substrate_projection` **[off by default]** | project that intermediate into the v3 **raw** shapes, grouped into one named graph per `pulse:ExtractionOutput`. An entity with two sources is emitted once per source, its properties partitioned between the copies. Each output names the index build it read via `prov:used` → `pulse:SourceSnapshot`. Returned as `substrate` |
+| `canonical_projection` | project the intermediate into the v3 **canonical** shapes and swap in the generated `@context`. This is what `output` carries |
 | `shacl_gate` | SHACL validation — **warning-only**, see below |
+| `extraction_run` | describe the run as a `pulse:ExtractionRun` + `prov:SoftwareAgent`, beside `output` |
+| `substrate_write` **[off by default]** | fold the run descriptor into the substrate's meta graph and POST the quads to Oxigraph |
 | `compute_stats` | response counters and timings |
+
+Raw projection reads a private normalized intermediate that retains source facts
+such as `_subscribers_count` and `_bio`. Public JSON-LD strips those keys (or
+renames them for debug output), so it cannot supply the raw mappings. The private
+copy is excluded from state serialization, and raw output removes internal keys
+recursively. GitHub profile mappings run only for GitHub profiles; ORCID biography
+does not become a GitHub biography. `schema:programmingLanguage` carries programming
+languages; `pulse:language` is reserved for natural language.
 
 ### Why `shacl_gate` is warning-only
 
@@ -197,7 +217,7 @@ These invariants are the contract every stage relies on. Breaking one of them te
 When the resolver stages find a high-confidence ROR match for a Person, they create:
 
 1. **`org:Membership`** linking Person → Organization. No role, no dates (we have no evidence).
-2. **`org:Organization`** stub with `pulse:ror`, `schema:name`, `idSource = pulse:ror` — only when that ROR URL isn't already in the graph.
+2. **`org:Organization`** stub with `pulse:ror`, `schema:identifier`, `identifiers.uuid`, `schema:name`, `idSource = pulse:ror` — only when that ROR URL isn't already in the graph.
 3. **Provenance** via `_source` on both entities. Stripped at output unless `include_internal_fields=true`. Values: `resolve_company_to_ror`, `resolve_bio_to_ror`, `resolve_bio_to_ror_llm`.
 
 ```mermaid
@@ -229,6 +249,21 @@ Both namespaces register in `@context` only when `include_internal_fields=true`,
 
 ---
 
+## Observing one run
+
+Set `include_run_report=true` on GET or POST extraction for the actual generation
+and post-processing timeline. The optional `run_report` includes stage outcomes,
+activity and retrieval links, property-change summaries, validator results and
+model usage. Default requests do not take report snapshots or attach the report.
+Cache hits are labelled reuse and do not claim fresh extraction or model cost.
+See the [API contract and example](v2-api-reference.md#optional-run-report).
+
+The report records function execution and explicit outcomes; stage completion
+does not imply every optional side effect, such as a configured store write,
+took place. Validation conformance and model/retrieval failures remain separately
+inspectable. `stats.stages_completed` is retained for compatibility and is not
+the authoritative execution timeline.
+
 ## Env flags worth knowing
 
 | Flag | Default | Effect |
@@ -243,8 +278,12 @@ Both namespaces register in `@context` only when `include_internal_fields=true`,
 | `V2_LINK_VERACITY_ENABLED` | **`true`** | `link_veracity` (Selenium + LLM URL verification). On in LLM mode; set `false` for batch runs. Rule-based mode skips it unconditionally. |
 | `V2_CONCEPT_TAGGING_ENABLED` | `false` | `concept_tagging`. Backend via `V2_CONCEPT_TAGGING_BACKEND` ∈ {`epfl_graph`, `wikipedia`, `llm`}. |
 | `V2_EXPAND_OWNED_REPOS` | `false` | Materialise each owned repo as a full entity instead of a `pulse:owns` reference. |
-| `V2_MAX_CONCURRENT_AGENTS` | `6` | Per-stage fan-out concurrency. |
+| `V2_MAX_CONCURRENT_AGENTS` | `8` | Per-stage fan-out concurrency. |
 | `V2_PIPELINE_CACHE_ENABLED` | `true` | Outer `/extract` cache. Set to `false` to force a fresh pipeline run. |
+| `V2_CANONICAL_OUTPUT_ENABLED` | `true` | `output` carries the v3 canonical shapes. `false` restores the v2 shape. |
+| `V2_SUBSTRATE_ENABLED` | `false` | `substrate_projection` + `substrate_write` (the raw layer in named graphs). |
+| `V2_SUBSTRATE_STORE_URL` | unset | Oxigraph root the substrate is written to. Unset: projected and returned, stored nowhere. |
+| `V2_SUBSTRATE_VALIDATE` | `true` | Validate each substrate slice against the raw shapes at write. Reports, never refuses. |
 
 Defaults verified against `api/_helpers.py` and `pipeline/orchestrator.py` on 2026-07-29. Full list: [`.env.example`](https://github.com/Imaging-Plaza/git-metadata-extractor/blob/main/.env.example).
 
@@ -256,12 +295,93 @@ Defaults verified against `api/_helpers.py` and `pipeline/orchestrator.py` on 20
 |---|---|
 | How the layers fit together | [Architecture Overview](architecture/overview.md) |
 | The index-layer split and version pinning | [Cross-Repo Contract](cross-repo-contract.md) |
-| Post-agent stage sequencing | `git_metadata_extractor/api/extract.py` — `_run_extract_job`, with `# === <name> stage ===` banners |
+| Post-agent stage sequencing | `git_metadata_extractor/pipeline/run.py` — ordered chains executed by `services/extraction.py` |
 | Agent plans and fan-out | `git_metadata_extractor/pipeline/orchestrator.py` — `PLAN_BY_TYPE` (line ~120) |
 | Individual stages | `git_metadata_extractor/pipeline/stages/` — one module per stage; resolvers are `resolve_*.py` |
 | Schema source of truth | `git_metadata_extractor/schema/json/` (agent + strict) and `schema/ontology/open-pulse-ontology.ttl` |
+| Deterministic field mappings and policies | [Source-to-ontology mappings](architecture/overview.md#source-to-ontology-mappings) |
 | Env flags and gates | `git_metadata_extractor/api/_helpers.py` — every `V2_*` reader lives here |
 
 The former "deep reference" pointer (`.internal/v2-pipeline-reference.md`) was
 removed: that directory is untracked, so the file does not exist in a fresh
 clone. The stage inventory above replaces it.
+
+
+## Enrichment evidence and incomplete coverage
+
+Rule-based and hybrid repository generation preserve explicitly requested paper
+references from `CITATION.cff` (preferred article), `CITATION.bib`, and README
+citation sections. `parsers/project_citations.py` prepares these facts from the original fetched
+README before HTML cleanup;
+`mapping/config/agent/repository.yaml` carries them through the intermediate;
+output assembly emits DOI/arXiv IRIs as `schema:citation`. The canonical and raw
+shapes permit external citation IRIs. A reference can therefore survive without
+inventing the authors or publication date required for a ScholarlyArticle node.
+Article enrichment searches explicit DOI/title evidence before repository-name
+queries. Incidental bibliography entries and software archive DOIs are not
+project-paper evidence.
+
+ROR organization matching requires a complete name, alias, explicit acronym, or
+all distinctive words of one candidate name. A lone shared subject word does not
+establish identity. Conflicting institutional websites block name-based identity
+and parent matches; host comparison includes the domain suffix. Shared hosting
+sites provide no website identity evidence. Exact names made entirely of generic
+words need an affirmative website match in the organization agent. Authoritative
+shared external identifiers remain a separate parent-selection signal.
+
+Resolver-created ROR organizations reuse the identity normalizer, supplying
+`schema:identifier` and retaining a server UUID before strict validation. This
+repairs late-created stubs without relaxing the schema. Raw/canonical projection
+also reads an accepted ROR from `schema:identifier` when a late hybrid resolver
+keeps a UUID node ID; existing references keep the same target.
+
+Contributor retrieval returns structured coverage alongside the accounts. GIMIE
+results have unknown completeness because the sidecar provides no pagination
+metadata. If it provides no usable identities, the provider attempts at most
+three GitHub REST pages of 100 linked accounts. Completed REST pagination does
+not establish coverage of anonymous authors. Failed or truncated retrieval emits
+an incomplete-coverage warning and a partial context-gather outcome in the
+optional run report. Partial/unavailable results are not written to the pipeline
+cache, so subsequent requests can recover. Upstream limits can still leave a
+minimal graph; inspect warnings rather than interpreting missing contributors as
+proof that a repository has none.
+
+For GitHub's explicit oversized contributor-history refusal only, one recent
+commits page supplies linked authors. Coverage remains partial with scope
+`recent_commit_authors`; these are neither all authors nor a ranking by total
+contributions. Sampled identities have unknown counts unless another lookup
+verifies them. Authentication failures, exhausted quota and Retry-After responses
+do not trigger this fallback.
+
+Late affiliation producers now register memberships for strict validation and
+link them from their Person. Both membership collections reuse the original
+accepted body, preserving UUID, role, dates and source evidence. Routing tests
+exercise strict validation and assembly before projection: SHACL alone cannot
+detect an entity placed in the run metadata graph.
+
+If strict validation excludes a Person, dependent memberships are removed even
+when their organization remains. Long email top-level domains and plus addresses
+are accepted by the strict Person contract. Hybrid organization writers normalize
+GitHub handles to profile URLs before strict validation, preserving existing IDs
+and inbound membership references.
+
+The async rule-based Person agent offloads synchronous provider calls to worker
+threads. Its configured fan-out can overlap I/O, and the event loop can process
+cancellation. An already running thread still relies on its provider timeout;
+cancelling the extraction does not forcibly stop that network operation.
+
+Infoscience calls share a process-local request gate and cooldown across worker
+threads. A call has a 30-second total queue/request/retry budget and at most three
+transient attempts; a longer Retry-After is preserved as a cooldown. Optional
+enrichment failures retain base entities and warn. They are not cached as empty
+provider results, and their explicit unavailability prevents pipeline caching.
+
+Public Infoscience searches deliberately omit `INFOSCIENCE_TOKEN`. The helper
+sends it only for an explicit authenticated request; token validity alone does
+not establish permission to search. Responses carrying an explicit AWS WAF
+CAPTCHA/challenge header produce a diagnostic and cooldown, without attempting
+to solve the challenge. An ordinary HTTP 405 remains a distinct permanent error.
+
+See the [original enrichment review](enrichment-fixes-2026-11-13.md) and the
+[membership and availability follow-up](availability-fixes-2026-11-16.md) for
+measured results and verification limits.

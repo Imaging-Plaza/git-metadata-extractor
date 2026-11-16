@@ -2,10 +2,13 @@ from __future__ import annotations
 
 import json
 from copy import deepcopy
-from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from git_metadata_extractor.pipeline.stages.models import AssembledOutput, ReconciledEntities
+from git_metadata_extractor.pipeline.stages.models import (
+    AssembledOutput,
+    ReconciledEntities,
+)
+from git_metadata_extractor.validation.metadata import strip_internal_metadata
 
 if TYPE_CHECKING:
     from git_metadata_extractor.validation.schema_validation import (
@@ -41,12 +44,22 @@ JSON_ENTITY_BUCKET_BY_TYPE = {
 }
 
 
-@dataclass(slots=True)
 class RootEntityValidationError(ValueError):
-    status_code: int = 422
-    entity_type: str = ""
-    entity_id: str = ""
-    validation_errors: list[dict[str, str]] = field(default_factory=list)
+    """Strict validation failed for the root entity."""
+
+    def __init__(
+        self,
+        *,
+        status_code: int = 422,
+        entity_type: str = "",
+        entity_id: str = "",
+        validation_errors: list[dict[str, str]] | None = None,
+    ) -> None:
+        super().__init__(f"Invalid {entity_type} root entity: {entity_id}")
+        self.status_code = status_code
+        self.entity_type = entity_type
+        self.entity_id = entity_id
+        self.validation_errors = validation_errors if validation_errors is not None else []
 
 
 def _entity_singular_type(entity_type: str) -> str:
@@ -124,12 +137,12 @@ def build_json_output(assembled: AssembledOutput) -> dict[str, Any]:
     if isinstance(assembled.root_entity, dict):
         graph_entities.append(assembled.root_entity)
     graph_entities.extend(assembled.related_entities)
-    return {
-        "root_entity": deepcopy(assembled.root_entity),
-        "related_entities": deepcopy(assembled.related_entities),
-        "excluded_entities": deepcopy(assembled.excluded_entities),
+    return strip_internal_metadata({
+        "root_entity": assembled.root_entity,
+        "related_entities": assembled.related_entities,
+        "excluded_entities": assembled.excluded_entities,
         "entities_by_type": _entities_by_type(graph_entities),
-    }
+    })
 
 
 def assemble_output(  # noqa: C901, PLR0912
@@ -257,6 +270,7 @@ def assemble_output(  # noqa: C901, PLR0912
     # article's DOI URL into the root repo's `schema:citation` list
     # so the cross-store link is materialised.
     cleaned_root = _clean_relationship_refs(root_entity, excluded_ids)
+    _promote_project_citations([cleaned_root, *related_entities])
     cleaned_root, citation_warnings = _link_articles_to_root_repo(
         cleaned_root, related_entities,
     )
@@ -300,6 +314,26 @@ def _drop_person_url_self_loops(entities: list[dict[str, Any]]) -> None:
                 target = inner.strip()
         if target is not None and target == pid.strip():
             entity.pop("schema:url", None)
+
+
+def _promote_project_citations(entities: list[Any]) -> None:
+    # The strict intermediate's citation slot is scalar/DOI-only. Promote
+    # source-declared primary references after that gate; canonical/raw shapes
+    # accept arbitrary citation IRIs without requiring an Article node.
+    for repository in entities:
+        if not isinstance(repository, dict) or repository.get("type") != "schema:SoftwareSourceCode":
+            continue
+        declared = repository.pop("_project_citations", None)
+        if not isinstance(declared, list) or not declared:
+            continue
+        existing = repository.get("schema:citation")
+        citations = list(existing) if isinstance(existing, list) else [existing] if existing else []
+        for citation in declared:
+            iri = citation.get("iri") if isinstance(citation, dict) else None
+            if isinstance(iri, str) and iri.startswith(("https://doi.org/", "https://arxiv.org/abs/")) and iri not in citations:
+                citations.append(iri)
+        if citations:
+            repository["schema:citation"] = citations
 
 
 def _link_articles_to_root_repo(

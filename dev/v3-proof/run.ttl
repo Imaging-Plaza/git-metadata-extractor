@@ -1,0 +1,15 @@
+@prefix prov: <http://www.w3.org/ns/prov#> .
+@prefix pulse: <https://open-pulse.epfl.ch/ontology#> .
+@prefix schema1: <http://schema.org/> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:pulse:run:proof-0001> a pulse:ExtractionRun ;
+    prov:endedAtTime "2026-09-08T12:00:22+00:00"^^xsd:dateTime ;
+    prov:startedAtTime "2026-09-08T12:00:00+00:00"^^xsd:dateTime ;
+    pulse:extractedBy <urn:pulse:agent:git-metadata-extractor> ;
+    pulse:extractionSeed "https://github.com/ANTsX/ANTs" .
+
+<urn:pulse:agent:git-metadata-extractor> a prov:SoftwareAgent ;
+    schema1:name "git-metadata-extractor" ;
+    schema1:softwareVersion "3.0.0" .
+

@@ -1,0 +1,41 @@
+Task 1 implementation (2026-11-11)
+
+Files: scripts/docs/build_site.py, tests/docs/test_build_site.py, and the
+file-protocol link guard in docs/guide/guide.js. No source Markdown moved.
+
+CLI supports --output (default site), --versions-branch and --landing-source.
+Local mode invokes the active interpreter's MkDocs module with --strict into
+docs/. Versioned mode resolves the Git ref to a commit, reads versions.json,
+exports only declared version directories and copies aliases from their
+targets. It never copies unrelated branch content or alias symlinks. Empty,
+missing, malformed or unsafe version declarations fail the build.
+
+Landing HTML preserves original markup/SVG casing and rewrites only local
+guide assets, documentation hyperlinks and a built-landing marker. References
+include their query strings and fragments. Copied guide/index.html entrypoints
+redirect to the site root with query/fragment preserved by JavaScript, plus a
+link/meta-refresh fallback. Source guide file:// behavior stays intact.
+
+The entire artifact is staged before replacing an old build. Existing output
+must be empty, carry the generated .pages-build marker, or be the recognized
+legacy repo/site MkDocs artifact. Checkout roots/ancestors, existing source
+trees, output symlinks/junctions, archive traversal and archive symlinks are
+refused. No shell=True, extractall, or runtime dependencies are used.
+
+Validation: tests were written before the script and failed because the CLI
+did not exist. Final command:
+  .staging/docs-tooling/Scripts/python.exe -m unittest discover -s tests/docs -v
+Result: 13 tests passed, including a real strict MkDocs build in a non-Git
+temporary project, real Git archive exports, Mike-style symlink aliases,
+version selection/fallback, link/fragment rewriting, separate landing source,
+safe rebuilds and retention of the prior artifact on strict-build failure.
+The strict-failure fixture intentionally emits one missing-link warning and
+aborts; this is its expected passing outcome.
+
+ruff check scripts/docs/build_site.py tests/docs/test_build_site.py passes.
+Stdlib-unittest and explicit validated subprocess calls have narrow documented
+lint exceptions. No full application/runtime suite was run, as requested.
+
+Root agent owns actual repository build/browser/prefix checks, workflow changes,
+Mike integration, and all publishing/repository actions. No commit or push was
+performed by this task.

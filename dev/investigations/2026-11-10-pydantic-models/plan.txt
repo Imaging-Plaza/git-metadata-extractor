@@ -1,0 +1,41 @@
+Pydantic model consistency
+
+Goal: replace hand-written dataclasses with Pydantic data models and remove
+duplicated configuration/serialization plumbing, locally without committing.
+Use executing-plans for implementation and one independent review at the end.
+
+Design:
+- InternalModel centralizes extra='forbid' and support for runtime objects.
+- Frozen declarations use Pydantic's frozen=True class option.
+- Constructors use explicit keywords; no custom positional-constructor shim.
+- Keep generated schemas/models untouched. Keep public module/class names.
+- Resource tasks use PrivateAttr. Provider objects remain borrowed references.
+- Exceptions remain ordinary exception classes, not BaseModel subclasses.
+- Only third-party dataclass interoperability may retain dataclasses helpers.
+- Validation now rejects malformed constructor data and unknown fields.
+- Preserve API output, graph stages, evidence, cache isolation and cleanup.
+
+1. Add regression tests for model validation, immutable options, mutable-default
+   isolation, provider identity, resource privacy and model copy behavior.
+   Run them before implementation to observe failures.
+2. Convert production records and test fixtures; migrate constructor call sites,
+   introspection, copies and provenance provider wrapping to Pydantic APIs.
+   Resolve runtime annotations without broad import or formatting churn.
+3. Test the deterministic suite in the existing offline Docker image. Diagnose
+   copying/aliasing, serialization and validation regressions at their source.
+4. Review the migration independently, address findings, run scoped lint and
+   model-codegen checks, and record exact results and compatibility limits.
+
+Review focus: Pydantic container copies vs stage mutation; duck-typed injected
+providers and observation proxies; private async cleanup task ownership;
+runtime-resolvable annotations; explicit serialization at the API boundary.
+
+Execution ledger
+- Completed steps 1?4. Initial four contract tests failed as expected.
+- Converted 65 data records plus one ordinary exception; preserved external
+  dataclass interoperability only. Added a configuration serialization check.
+- Independent review found warning-list aliasing and standalone-script import
+  regressions. Both were reproduced, fixed and rechecked by the reviewer.
+- Final suite 1860 passed/1 skipped; schema codegen current; no new lint issues.
+- Ruling: keep existing unrelated lint/complexity debt outside this migration.
+- All changes remain local and uncommitted. See validation.txt for full evidence.

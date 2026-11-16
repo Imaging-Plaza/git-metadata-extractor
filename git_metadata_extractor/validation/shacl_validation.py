@@ -1,7 +1,10 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
+
+from pydantic import Field
+
+from git_metadata_extractor.models import InternalModel
 
 if TYPE_CHECKING:
     from rdflib import Graph
@@ -29,11 +32,10 @@ WHERE {
 """
 
 
-@dataclass(slots=True)
-class SHACLValidationResult:
+class SHACLValidationResult(InternalModel):
     conforms: bool
-    violations: list[dict[str, str | None]] = field(default_factory=list)
-    warnings: list[dict[str, str | None]] = field(default_factory=list)
+    violations: list[dict[str, str | None]] = Field(default_factory=list)
+    warnings: list[dict[str, str | None]] = Field(default_factory=list)
 
 
 class SHACLRuntimeUnavailableError(RuntimeError):

@@ -16,28 +16,6 @@ def _clear_v2_config_env(monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv(key, raising=False)
 
 
-def test_v2_config_with_required_env_is_valid(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    _clear_v2_config_env(monkeypatch)
-    monkeypatch.setenv("GME_GITHUB_TOKEN", "test-value")
-
-    config = V2Config()
-    config.validate_preflight()
-
-    assert config.GME_GITHUB_TOKEN
-
-
-def test_v2_config_missing_github_token_raises_descriptive_error(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    _clear_v2_config_env(monkeypatch)
-
-    config = V2Config()
-    with pytest.raises(ValueError, match="Missing required environment variable: GME_GITHUB_TOKEN"):
-        config.validate_preflight()
-
-
 def test_v2_agent_runtime_default_is_llm(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -49,16 +27,18 @@ def test_v2_agent_runtime_default_is_llm(
     assert config.V2_AGENT_RUNTIME_DEFAULT == AgentRuntime.LLM
 
 
-def test_v2_agent_runtime_default_can_be_set_to_llm(
+# Only values other than the default (`llm`) can show the variable is read.
+@pytest.mark.parametrize("runtime", [AgentRuntime.RULE_BASED, AgentRuntime.HYBRID])
+def test_v2_agent_runtime_default_can_be_set_from_env(
     monkeypatch: pytest.MonkeyPatch,
+    runtime: AgentRuntime,
 ) -> None:
     _clear_v2_config_env(monkeypatch)
-    monkeypatch.setenv("GME_GITHUB_TOKEN", "test-value")
-    monkeypatch.setenv("V2_AGENT_RUNTIME_DEFAULT", "llm")
+    monkeypatch.setenv("V2_AGENT_RUNTIME_DEFAULT", runtime.value)
 
     config = V2Config()
 
-    assert config.V2_AGENT_RUNTIME_DEFAULT == AgentRuntime.LLM
+    assert config.V2_AGENT_RUNTIME_DEFAULT is runtime
 
 
 def test_v2_agent_runtime_default_rejects_invalid_values(

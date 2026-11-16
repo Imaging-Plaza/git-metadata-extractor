@@ -1,0 +1,9 @@
+schema_version: 1
+name: raw.profile_base
+version: '1'
+source_contract: prepared.raw.profile_base
+target_contract: raw.platform_profile
+fields:
+  '@id': {sources: [id], empty: preserve, missing: 'null'}
+  '@type': {sources: [type], empty: preserve, missing: 'null'}
+  pulse:platform: {sources: [platform], empty: preserve, missing: 'null'}

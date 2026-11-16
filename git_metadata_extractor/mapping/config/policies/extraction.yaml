@@ -1,0 +1,74 @@
+schema_version: 1
+name: policies.extraction
+version: '1'
+repository_rules:
+- value: pulse:EducationalResource
+  keywords:
+  - course
+  - tutorial
+  - training
+  - workshop
+  - exercise
+  - lesson
+- value: pulse:Documentation
+  keywords:
+  - documentation
+  - best-practice-documentation
+  - best practice
+  - user guide
+  - handbook
+  - spec
+  - specification
+  - rfc
+- value: pulse:Data
+  keywords:
+  - dataset
+  - data-archive
+  - corpus
+  - benchmark
+documentation_languages:
+- asciidoc
+- html
+- markdown
+- rst
+- tex
+- text
+documentation_type: pulse:Documentation
+repository_default: pulse:Software
+auxiliary_files:
+  _citation_cff_url:
+  - citation.cff
+  _authors_url:
+  - authors
+  - authors.md
+  - authors.rst
+  - authors.txt
+  _contributing_url:
+  - contributing.md
+  - contribution.md
+  _publiccode_url:
+  - publiccode.yml
+  - publiccode.yaml
+  _security_url:
+  - security.md
+  _code_of_conduct_url:
+  - code_of_conduct.md
+  - code_of_conduct
+organization_rules:
+- value: pulse:University
+  keywords:
+  - education
+- value: pulse:GovernmentAgency
+  keywords:
+  - government
+- value: pulse:NonProfitOrganization
+  keywords:
+  - nonprofit
+  - non-profit
+- value: pulse:PrivateCompany
+  keywords:
+  - company
+- value: pulse:ResearchInstitution
+  keywords:
+  - research
+organization_default: pulse:OtherOrganizationType

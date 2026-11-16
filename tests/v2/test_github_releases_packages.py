@@ -3,21 +3,19 @@
 Covers `RealGitHubProvider.get_repository_releases` /
 `get_repository_container_images` (thinning, pagination scope, the
 org→user fallback, and graceful degradation when the token lacks
-`read:packages`) and the repository agent stamping the results onto the
-`_releases` / `_container_images` internal fields.
+`read:packages`). The repository agent stamping the results onto the
+`_releases` / `_container_images` internal fields is covered in
+`test_repo_enrichment_fields.py`.
 """
 
 from __future__ import annotations
 
-import asyncio
 from typing import Any
 from unittest.mock import patch
 
 import pytest
 
-from git_metadata_extractor.agents import ProviderSet, RepositoryAgentV2
 from git_metadata_extractor.providers.github_provider import RealGitHubProvider
-from git_metadata_extractor.providers.mock_github import MockGitHubProvider
 
 
 class _FakeResponse:
@@ -192,52 +190,3 @@ def test_container_images_empty_for_bad_full_name() -> None:
     # No request should be issued for a handle without an owner/repo split.
     with _patch_get(side_effect=AssertionError("should not call the API")):
         assert provider.get_repository_container_images("no-slash") == []
-
-
-# --------------------------------------------------------------------------
-# Agent stamping
-# --------------------------------------------------------------------------
-
-
-def _run_agent_with_metadata(metadata_extra: dict[str, Any]) -> dict[str, Any]:
-    agent = RepositoryAgentV2()
-    providers = ProviderSet(github=MockGitHubProvider())
-    result = asyncio.run(
-        agent.run(
-            {
-                "full_name": "octocat/Hello-World",
-                "repository_context": {
-                    "full_name": "octocat/Hello-World",
-                    "metadata": {
-                        "name": "Hello-World",
-                        "full_name": "octocat/Hello-World",
-                        "owner": {"login": "octocat", "type": "User"},
-                        "created_at": "2020-01-01T00:00:00Z",
-                        "license": {"spdx_id": "MIT"},
-                        "fork": False,
-                        "source": {"full_name": None},
-                        **metadata_extra,
-                    },
-                    "contributors": [{"login": "octocat"}],
-                    "languages": {"Python": 1},
-                    "aux_files": {},
-                },
-            },
-            providers,
-        ),
-    )
-    return result.raw_output
-
-
-def test_agent_stamps_releases_and_container_images() -> None:
-    releases = [{"tag_name": "v1.0.0", "name": "1.0.0", "assets": []}]
-    images = [{"name": "Hello-World", "image": "ghcr.io/octocat/Hello-World", "tags": ["latest"]}]
-    raw = _run_agent_with_metadata({"releases": releases, "container_images": images})
-    assert raw["_releases"] == releases
-    assert raw["_container_images"] == images
-
-
-def test_agent_releases_and_images_none_when_absent() -> None:
-    raw = _run_agent_with_metadata({})
-    assert raw["_releases"] is None
-    assert raw["_container_images"] is None

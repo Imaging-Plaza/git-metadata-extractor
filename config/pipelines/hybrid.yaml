@@ -1,0 +1,7 @@
+schema_version: 1
+name: hybrid-full
+version: '1'
+runtime: hybrid
+collectors:
+  - component: github.context
+max_concurrent_agents: 4

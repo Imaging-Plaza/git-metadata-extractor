@@ -9,6 +9,7 @@ from typing import Annotated, Any, Literal
 from fastapi import Depends, Request, status
 from fastapi.responses import JSONResponse
 
+from git_metadata_extractor import config as config_module
 from git_metadata_extractor.api_models import (
     V2HealthResponse,
 )
@@ -17,6 +18,7 @@ from git_metadata_extractor.config import V2Config
 from git_metadata_extractor.providers.cache import (
     ProviderCache,
 )
+from git_metadata_extractor.store import oxigraph
 from git_metadata_extractor.observation.github_rate_limit import (
     GitHubRateLimitSummary,
     probe_github_rate_limit,
@@ -69,6 +71,37 @@ async def clear_v2_cache(
 
 
 
+async def _substrate_store_status() -> (
+    Literal["healthy", "degraded", "unhealthy"] | None
+):
+    """The substrate store's health, or None when the writer is switched off.
+
+    None rather than a status, because an opt-in feature that is off must not
+    colour the overall status — and a component that is always reported but
+    always store-less would report every default deployment as degraded.
+
+    Every read is wrapped, like the `V2Config()` read in `health` and for the
+    same reason: the flag readers raise on an unparseable value, and a typo in
+    an env var must report unhealthy rather than 500 the endpoint that exists
+    to say so.
+    """
+    try:
+        if not config_module.substrate_enabled():
+            return None
+        store = oxigraph.store_from_config(
+            config_module.substrate_store_url(),
+            timeout=config_module.substrate_store_timeout_seconds(),
+        )
+    except ValueError:
+        logger.exception("substrate store configuration is invalid")
+        return "unhealthy"
+    if store is None:
+        # Enabled with nowhere to write: the substrate is still projected and
+        # returned, so this is a degradation rather than a failure.
+        return "degraded"
+    return "healthy" if await store.is_available() else "degraded"
+
+
 @v2_router.get(
     "/health",
     response_model=V2HealthResponse,
@@ -101,6 +134,10 @@ async def health() -> V2HealthResponse:
         )
     else:
         component_statuses["github_token"] = "degraded"
+
+    substrate_status = await _substrate_store_status()
+    if substrate_status is not None:
+        component_statuses["substrate_store"] = substrate_status
 
     overall_status: Literal["healthy", "degraded", "unhealthy"]
     if "unhealthy" in component_statuses.values():

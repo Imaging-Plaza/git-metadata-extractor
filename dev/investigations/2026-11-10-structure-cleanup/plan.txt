@@ -1,0 +1,26 @@
+Local structure cleanup - implementation plan
+=============================================
+Approved scope: remove unused helpers; centralize provider wiring/lifecycle;
+extract one transport-independent execution service for API and benchmark use.
+Preserve previous uncommitted work, HTTP contracts, stage ordering, provenance,
+cache/profile/tool semantics and separate index ownership. No commit or push.
+
+1. Add regression checks for transport boundaries, direct execution/cache/error
+   parity and provider resource ownership/cleanup. Observe initial failures.
+2. Move shared stage flags/constants/format helpers to pipeline/settings.py;
+   leave compatibility exports in api/_helpers.py. Remove four uncalled API
+   helpers and stale references. Pipeline stages must not import API modules.
+3. Add providers/runtime.py with a declarative RAG registration table and plain
+   state-based bundle construction. Keep dependencies.py as HTTP adapter plus
+   compatibility exports. Construct only providers actually required after
+   overrides. Track owned vs borrowed resources; centralize async/sync cleanup
+   and close shared providers on app shutdown. Keep ProviderSet shape stable.
+4. Add services/extraction.py with explicit options/resources and a typed result
+   or domain error. Core owns orchestration, validation, output and cache flow;
+   adapter owns HTTP errors, request state, auth and auto-ingest scheduling.
+   API GET/async jobs use the adapter; experiments call the service directly.
+5. Run focused tests and the complete deterministic Docker suite. Independent
+   review of boundaries/lifetimes/contracts; retain local validation notes.
+
+No job queue/backpressure or broad module split in this batch. No live model
+calls. Refactor settings by relocation rather than changing gate semantics.
