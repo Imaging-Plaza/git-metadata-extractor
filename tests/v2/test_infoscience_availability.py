@@ -84,7 +84,7 @@ def test_long_retry_after_fails_fast_and_suppresses_other_queries(monkeypatch, c
 
 
 @pytest.mark.usefixtures("clock")
-@pytest.mark.parametrize("status", [400, 401, 403, 404])
+@pytest.mark.parametrize("status", [400, 401, 403, 404, 405])
 def test_permanent_failure_is_not_retried_or_cached_as_empty(monkeypatch, tmp_path, status):
     calls = []
 
@@ -102,6 +102,62 @@ def test_permanent_failure_is_not_retried_or_cached_as_empty(monkeypatch, tmp_pa
     assert provider.search_publications("test") == []
     assert provider.search_publications("test") == []  # Successful empty hits still cache.
     assert len(calls) == 2
+
+
+@pytest.mark.parametrize(("status", "action"), [(405, "captcha"), (202, "challenge")])
+def test_waf_challenge_fails_once_and_cools_down_without_caching(
+    monkeypatch, clock, tmp_path, status, action,
+):
+    calls = []
+
+    def handler(request):
+        calls.append(request.url.path)
+        if len(calls) == 1:
+            return httpx.Response(status, headers={
+                "x-amzn-waf-action": action, "Retry-After": "600",
+            })
+        return httpx.Response(200, json={"_embedded": {"searchResult": {"page": {"totalElements": 0}}}})
+
+    transport(monkeypatch, handler)
+    provider = RealInfoscienceProvider(cache=ProviderCache(tmp_path / "cache.sqlite"))
+    with pytest.raises(ProviderError, match=f"WAF {action}"):
+        provider.search_publications("test")
+    with pytest.raises(ProviderError, match="temporarily unavailable"):
+        provider.search_person("someone else")
+    assert len(calls) == 1
+    assert clock.waits == []
+    clock.now += 601
+    assert provider.search_publications("test") == []
+    assert len(calls) == 2
+
+
+@pytest.mark.usefixtures("clock")
+@pytest.mark.parametrize("use_auth", [False, True])
+def test_bearer_token_is_only_sent_when_authentication_is_requested(monkeypatch, use_auth):
+    monkeypatch.setattr(infoscience, "INFOSCIENCE_TOKEN", "test-only-token")
+
+    def handler(request):
+        expected = "Bearer test-only-token" if use_auth else None
+        assert request.headers.get("Authorization") == expected
+        return httpx.Response(200, json={"ok": True})
+
+    transport(monkeypatch, handler)
+    assert asyncio.run(infoscience._make_api_request("/search", use_auth=use_auth)) == {"ok": True}
+
+
+@pytest.mark.usefixtures("clock")
+@pytest.mark.parametrize("search", [
+    infoscience.search_authors, infoscience.search_labs, infoscience.search_publications,
+])
+def test_public_search_does_not_send_configured_protected_route_token(monkeypatch, search):
+    monkeypatch.setattr(infoscience, "INFOSCIENCE_TOKEN", "test-only-token")
+
+    def handler(request):
+        assert "Authorization" not in request.headers
+        return httpx.Response(200, json={"_embedded": {"searchResult": {"page": {"totalElements": 0}}}})
+
+    transport(monkeypatch, handler)
+    assert asyncio.run(search("public metadata")).total_results == 0
 
 
 @pytest.mark.parametrize("failure", [429, 503, "timeout"])

@@ -75,7 +75,7 @@
     },
     "schema:email": {
       "type": "string",
-      "pattern": "^[\\w\\-\\.]+@([\\w-]+\\.)+[\\w-]{2,4}$"
+      "pattern": "^[\\w\\-\\.\\+]+@([\\w-]+\\.)+[\\w-]{2,}$"
     },
     "schema:url": {
       "type": [

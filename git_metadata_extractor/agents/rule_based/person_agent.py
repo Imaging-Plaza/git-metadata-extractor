@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import re
 from copy import deepcopy
@@ -285,14 +286,17 @@ class PersonAgentV2:
         warnings: list[str] = []
         unavailable_providers: list[str] = []
         username = _resolve_username(context)
-        github_user = providers.github.get_user(username)
+        # Provider methods are synchronous; keep their I/O off the event loop
+        # so the orchestrator's bounded fan-out and cancellation can run.
+        github_user = await asyncio.to_thread(providers.github.get_user, username)
 
         # Profile README (`<user>/<user>`'s README) — the richest free-text
         # self-description GitHub exposes for a user. Fetched directly
         # alongside the user profile; stamped as internal `_profile_readme`.
         person_profile_readme: str | None = None
         try:
-            _profile_readme = providers.github.get_profile_readme(
+            _profile_readme = await asyncio.to_thread(
+                providers.github.get_profile_readme,
                 username,
                 is_organization=False,
             )
@@ -309,7 +313,9 @@ class PersonAgentV2:
 
         if providers.orcid and orcid_identifier_hint:
             try:
-                orcid_record = providers.orcid.get_person_by_orcid(orcid_identifier_hint)
+                orcid_record = await asyncio.to_thread(
+                    providers.orcid.get_person_by_orcid, orcid_identifier_hint,
+                )
             except (ProviderNotFoundError, ValueError) as exc:
                 warnings.append(f"ORCID lookup failed: {exc}")
         elif not providers.orcid:
@@ -323,7 +329,9 @@ class PersonAgentV2:
                 or username
             )
             try:
-                infoscience_results = providers.infoscience.search_person(str(search_query))
+                infoscience_results = await asyncio.to_thread(
+                    providers.infoscience.search_person, str(search_query),
+                )
             except ProviderError as exc:
                 warnings.append(f"Infoscience person enrichment failed: {exc}")
                 unavailable_providers.append("infoscience")
@@ -375,7 +383,9 @@ class PersonAgentV2:
                 affiliation_hints.append(github_user["company"])
             orcid_search_hits: Any = []
             try:
-                orcid_search_hits = providers.orcid.search_persons(str(discovery_name))
+                orcid_search_hits = await asyncio.to_thread(
+                    providers.orcid.search_persons, str(discovery_name),
+                )
             except (ProviderNotFoundError, ValueError) as exc:
                 warnings.append(f"ORCID discovery search failed: {exc}")
             discovered_hit = _pick_best_orcid_search_hit(
@@ -394,7 +404,8 @@ class PersonAgentV2:
                 )
                 if orcid_record is None:
                     try:
-                        orcid_record = providers.orcid.get_person_by_orcid(
+                        orcid_record = await asyncio.to_thread(
+                            providers.orcid.get_person_by_orcid,
                             discovered_orcid,
                         )
                     except (ProviderNotFoundError, ValueError) as exc:

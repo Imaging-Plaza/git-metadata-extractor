@@ -127,3 +127,91 @@ Retained local evidence is under `data/benchmarks/sources-20261116`: individual
 IDs. Completeness checks confirm exactly 40 unique expected trials, no duplicates
 or missing cases, and substrate plus raw validation for all 39 completed results.
 The baseline remains under `data/benchmarks/sources-20261113`.
+
+## Subsequent local fixes and profiling
+
+The changes below were made after the frozen matrix above; its outcomes have not
+been replaced or reclassified.
+
+- Strict Person JSON Schema, generated models and packaged legacy SHACL now agree
+  on accepting long email top-level domains and plus addresses. Membership cleanup
+  removes affiliations with no surviving Person inverse link.
+- Hybrid discovery, lab detection, organization resolution and rescue emit GitHub
+  profile URLs in the strict identifier slots. Existing organization IDs and UUIDs
+  remain stable when late facts are normalized.
+- The async Person agent offloads six synchronous provider call paths to worker
+  threads. Person/organization account prefilters also offload each lookup while
+  retaining sequential order and deduplication. Cancellation stops subsequent
+  lookups; an already running network call still depends on its provider timeout.
+- Explicit AWS WAF CAPTCHA/challenge response headers now trigger a precise
+  diagnostic and cooldown. This does not establish the cause of earlier 405s;
+  ordinary 405 remains a distinct error. No challenge bypass was introduced.
+
+### Infoscience token audit
+
+The token reaches Docker and is accepted by the authentication endpoint. Public
+searches intentionally omit it. An authenticated discovery probe returned
+**403, "No user agreement accepted"**; account agreement acceptance is required
+for that authenticated route. Public anonymous queries returned the intended
+entity types with the existing `person` and `orgunit` configurations. The plural
+alternatives returned Publication records, so neither authentication policy nor
+search configurations were changed.
+
+The sanitized probes are retained in
+`.staging/benchmark-20261116/infoscience-final-probe.jsonl`. No token values, account
+agreement acceptance, or external writes are part of this work.
+
+### Astropy profile
+
+A dedicated Docker run of the original image retained stage timings, provider and
+model durations, and coroutine stack samples without prompts, credentials or query
+strings. It timed out at **602.57 seconds**: extraction stages had finished, but
+cancellation arrived during resource cleanup. Major costs were:
+
+| Stage | Original profile, seconds |
+|---|---:|
+| Context gathering | 81.66 |
+| Person generation, including account prefilter | 152.30 |
+| Organization generation | 49.70 |
+| Company-to-ROR resolution | 40.35 |
+| Hybrid refinement | 262.28 |
+
+Refinement recorded 96 model invocations and 111 RCP HTTP requests, all HTTP 200.
+The largest coroutine-sampler gap was 127.37 seconds. Synchronous account checks
+and Person provider calls blocked the event loop; this was accumulated workload
+and blocked scheduling, not evidence of one indefinitely hung Astropy request.
+
+A paired run changed only the Person agent, retaining fan-out four, cold local
+caches, full configured coverage and the 600-second deadline. Its Person stage
+took **132.08 seconds**, versus 152.30 before; four active agent tasks were observed.
+The run **completed in 563.15 seconds**, returning 157 entities including 30 people
+and 30 contributions, with canonical SHACL validation passing. It recorded 99 model
+activities, 132 model requests, 2,090,950 prompt tokens and 27,601 completion tokens,
+with complete usage reporting. This diagnostic had no expected-fact assertions,
+so it is not a replacement for the original corpus accuracy checks.
+An Infoscience 429 with `Retry-After: 900` arrived later in organization generation,
+so unavailable enrichment confounds any overall speed comparison. This is one
+observational pair, not a repeatable throughput guarantee. The additional async
+account-prefilter fix is covered by deterministic tests and was not present in
+that paired live run.
+
+Profile evidence is under `data/benchmarks/astropy-profile-20261116`, with the
+paired run under `after-person-async`. Each retains instrumentation and settings;
+the original timeout additionally has a partial run report. Remaining limits
+include upstream throttling, synchronous work in other agents, expensive refinement
+fan-out and provider threads that cannot be forcibly cancelled.
+
+### Verification of the follow-up
+
+The combined offline Docker suite passed **2,135 tests**, with two skips and three
+credential-dependent cases deselected (`pytest tests/v2 -q -k 'not real_provider_call'
+--no-cov --disable-warnings --tb=short`, network disabled). The initial full run
+caught the legacy SHACL/email mismatch; updating the packaged legacy shape fixed
+it without weakening the alignment test. Generated-model `--check` and Ruff on
+the five added/modified regression files passed. Existing production-file lint
+debt remains; this is not a claim of a clean repository-wide lint run.
+
+The local API image includes all fixes. Its health endpoint returns HTTP 200;
+overall health is intentionally `degraded` because this inspection stack projects
+substrate without configuring a write-store URL. Sources and its pinned revision
+are unchanged. No publication or index ingestion was performed.

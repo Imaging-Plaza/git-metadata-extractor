@@ -45,6 +45,11 @@ Optional integrations:
 - `SELENIUM_REMOTE_URL` — enables the link-veracity pipeline stage and
   the `fetch_link_content_via_selenium` LLM tool.
 
+Public Infoscience searches do not send the configured token. For an explicit
+authenticated request, a valid token can still receive `403: No user agreement
+accepted`; the account owner must accept the service agreement through Infoscience
+before that account can use authenticated search.
+
 Per-indexer politeness (only needed when running the corresponding
 indexer):
 

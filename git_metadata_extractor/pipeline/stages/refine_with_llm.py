@@ -67,11 +67,15 @@ from git_metadata_extractor.agents.rule_based._repo_signals import (
     extract_doc_candidate_urls,
 )
 from git_metadata_extractor.api_models.enums import OrganizationTypeV2
+from git_metadata_extractor.canonicalization.github import github_org_iri
 from git_metadata_extractor.models import InternalModel
 from git_metadata_extractor.observation.evidence import activity, get_trace
 from git_metadata_extractor.parsers.citation_cff import parse_citation_cff
 from git_metadata_extractor.parsers.publiccode import parse_publiccode
 from git_metadata_extractor.pipeline.stages.models import ReconciledEntities
+from git_metadata_extractor.pipeline.stages.reconciliation import (
+    normalize_organization_identifiers,
+)
 
 if TYPE_CHECKING:
     from git_metadata_extractor.providers.epfl_graph_rag import EpflGraphRagProvider
@@ -818,7 +822,7 @@ def _materialize_org(
             f"(confidence={proposal.confidence:.2f} < {DISCOVERY_CONFIDENCE_FLOOR})"
         )
     ror = _normalize_ror(proposal.pulse_ror)
-    gh_handle = _normalize_github_handle(proposal.pulse_githubOrganizationHandle)
+    gh_handle = github_org_iri(proposal.pulse_githubOrganizationHandle)
     if not ror and not gh_handle:
         return None, (
             f"discovery_refiner: dropped Org proposal {proposal.schema_name!r} "
@@ -833,7 +837,7 @@ def _materialize_org(
         org_id = ror
         id_source = "pulse:ror"
     else:
-        org_id = f"https://github.com/{gh_handle}"
+        org_id = gh_handle
         id_source = "pulse:githubOrganizationHandle"
     if org_id in existing_ids:
         return None, (
@@ -1010,13 +1014,13 @@ def _materialize_lab_org(
     under review with the ontology owner.
     """
 
-    handle = _normalize_github_handle(proposal.pulse_githubUsername)
+    handle = github_org_iri(proposal.pulse_githubUsername)
     if not handle:
         return None, (
             f"discovery_refiner: dropped lab-Org proposal {proposal.schema_name!r} "
             "(no github handle)"
         )
-    org_id = f"https://github.com/{handle}"
+    org_id = handle
     if org_id in existing_org_ids:
         return None, (
             f"discovery_refiner: dropped lab-Org proposal {proposal.schema_name!r} "
@@ -1405,7 +1409,8 @@ def _apply_org_resolver_patch(
     # Pattern constraints:
     #   - schema:identifier  ⇒ must match `^https://ror\.org/[0-9a-z]{9}$`
     #     (NOT a github URL, NOT an infoscience URL).
-    #   - identifiers.pulse:infoscienceOrganizationIdentifier ⇒ bare UUID4.
+    #   - identifiers.pulse:infoscienceOrganizationIdentifier ⇒ orgunit URL.
+    # Accepted identifiers are normalized below, without renaming the entity.
     changed = False
     ror_pattern = re.compile(r"^https://ror\.org/[0-9a-z]{9}$")
     infoscience_uuid_pattern = re.compile(
@@ -1435,14 +1440,13 @@ def _apply_org_resolver_patch(
         raw = raw.split("/", maxsplit=1)[0].split("?", maxsplit=1)[0]
         if infoscience_uuid_pattern.match(raw):
             identifiers["pulse:infoscienceOrganizationIdentifier"] = raw
-            # Top-level mirror only if the schema has the property — it
-            # doesn't, so leave it off. `sh:or` is satisfied by the
-            # identifiers-block entry.
+            # The shared normalizer below supplies the orgunit URL and
+            # its top-level mirror required by the strict identity contract.
             changed = True
 
     if patch.pulse_githubOrganizationHandle:
-        handle = patch.pulse_githubOrganizationHandle.strip().lstrip("@")
-        if handle and " " not in handle:
+        handle = github_org_iri(patch.pulse_githubOrganizationHandle)
+        if handle:
             identifiers["pulse:githubOrganizationHandle"] = handle
             org["pulse:githubOrganizationHandle"] = handle
             changed = True
@@ -1466,6 +1470,7 @@ def _apply_org_resolver_patch(
         changed = True
 
     if changed:
+        normalize_organization_identifiers(org)
         org["_source"] = org.get("_source") or "org_resolver"
         org["_org_resolver_reason"] = (patch.reason or "")[:240]
         org["_org_resolver_confidence"] = patch.confidence
@@ -1824,6 +1829,7 @@ async def _run_rescue_pass(
                 "_rescue_reason": decision.reason[:240] if decision.reason else "",
                 "_rescue_confidence": decision.confidence,
             }
+            normalize_organization_identifiers(org_stub)
             new_orgs.append(org_stub)
             org_ids.add(org_id)
 

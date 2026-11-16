@@ -960,11 +960,20 @@ artefact. Never expose `_`-prefixed fields in API responses.
   name-based matches. Test ANTs and known legitimate aliases together.
 - Late ROR resolvers must reuse `normalize_organization_identifiers` before
   strict validation. Preserve `identifiers.uuid` when promoting an identity.
+- Hybrid organization discovery, lab detection, resolution and rescue must emit
+  GitHub profile URLs in both identifier slots. Normalize accepted late facts
+  without renaming referenced organization IDs; reject malformed handles.
 - Late membership writers must maintain the Person's `org:hasMembership` and
   register the same accepted body in both membership collections. Reconciliation
   initially populates `reconciled.memberships`; never recreate that entity with
   a new UUID or source tag just because the entity bucket is empty. Verify strict
   validation, assembly and source-graph routing together, not only raw SHACL.
+- Prune memberships with no surviving Person `org:hasMembership` inverse, even
+  when their organization survives. Strict Person email validation must retain
+  supported long-TLD and plus addresses; regenerate models after schema edits.
+- Async agents must offload synchronous provider I/O with `asyncio.to_thread` so
+  fan-out and cancellation remain responsive. Preserve request ContextVars;
+  cancellation does not forcibly terminate an already running provider thread.
 - Contributor coverage is evidence, not an ontology field. Keep partial or
   unavailable results out of the pipeline cache. GIMIE completeness is unknown;
   bounded REST pagination describes linked accounts only. Do not report an
@@ -978,6 +987,10 @@ artefact. Never expose `_`-prefixed fields in API responses.
   explicitly unavailable providers prevent pipeline-cache writes. Preserve the
   UUID lookup's 404 fallback. The request gate/cooldown is process-local, not a
   distributed rate limiter.
+- Public Infoscience searches intentionally omit the configured bearer token;
+  only explicit authenticated requests send it. A configured/valid token does
+  not imply search permission. Explicit AWS WAF CAPTCHA/challenge responses
+  fail with a diagnostic and cooldown; never solve or bypass the challenge.
 
 ## Reporting contract
 

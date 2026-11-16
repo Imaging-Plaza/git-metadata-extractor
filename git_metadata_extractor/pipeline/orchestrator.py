@@ -476,14 +476,14 @@ class PipelineOrchestrator:
                     for warning in fanout_warnings:
                         _append_unique(warnings, str(warning))
                 if stage.name == STAGE_PERSON_AGENTS and work_items:
-                    work_items, pre_stage_warnings = self._filter_person_work_items(
+                    work_items, pre_stage_warnings = await self._filter_person_work_items(
                         work_items,
                         providers,
                     )
                     for warning in pre_stage_warnings:
                         _append_unique(warnings, warning)
                 elif stage.name == STAGE_ORG_AGENTS and work_items:
-                    work_items, pre_stage_warnings = self._filter_org_work_items(
+                    work_items, pre_stage_warnings = await self._filter_org_work_items(
                         work_items,
                         providers,
                     )
@@ -957,7 +957,7 @@ class PipelineOrchestrator:
         return []
 
     @staticmethod
-    def _filter_person_work_items(
+    async def _filter_person_work_items(
         work_items: list[_StageWorkItem],
         providers: ProviderSet,
     ) -> tuple[list[_StageWorkItem], list[str]]:
@@ -985,7 +985,7 @@ class PipelineOrchestrator:
             if username not in account_type_by_username:
                 account_type: str | None = None
                 try:
-                    github_user = providers.github.get_user(username)
+                    github_user = await asyncio.to_thread(providers.github.get_user, username)
                 except Exception:  # noqa: BLE001
                     github_user = {}
                 if isinstance(github_user, dict):
@@ -1011,7 +1011,7 @@ class PipelineOrchestrator:
         return filtered_items, warnings
 
     @staticmethod
-    def _filter_org_work_items(
+    async def _filter_org_work_items(
         work_items: list[_StageWorkItem],
         providers: ProviderSet,
     ) -> tuple[list[_StageWorkItem], list[str]]:
@@ -1041,7 +1041,7 @@ class PipelineOrchestrator:
                 account_type: str | None = None
                 if providers.github is not None:
                     try:
-                        github_user = providers.github.get_user(org_name)
+                        github_user = await asyncio.to_thread(providers.github.get_user, org_name)
                     except Exception:  # noqa: BLE001
                         github_user = {}
                     if isinstance(github_user, dict):

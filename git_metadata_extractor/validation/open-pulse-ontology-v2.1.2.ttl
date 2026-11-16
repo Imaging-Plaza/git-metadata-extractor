@@ -156,11 +156,13 @@ pulse:NameShape
     sh:datatype xsd:string ;
     sh:minCount 1 .
 
+# Local compatibility correction: accept long TLDs and '+' sub-addressing,
+# matching the strict intermediate schema and v3 PlatformProfile email shape.
 pulse:EmailShape
     a sh:PropertyShape ;
     sh:path schema:email ;
     sh:nodeKind sh:Literal ;
-    sh:pattern "^[\\w\\-\\.]+@([\\w-]+\\.)+[\\w-]{2,4}$" ;
+    sh:pattern "^[\\w\\-\\.\\+]+@([\\w-]+\\.)+[\\w-]{2,}$" ;
     sh:description "Reusable validation for institutional and personal email addresses." .
 
 pulse:UrlShape

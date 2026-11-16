@@ -191,6 +191,21 @@ async def _request_with_retries(
         except (httpx.TransportError, asyncio.TimeoutError) as exc:
             reason = type(exc).__name__
         else:
+            # AWS WAF uses 405 for CAPTCHA and 202 for a browser challenge.
+            # Neither is a search response or a reason to retry immediately.
+            # Require the explicit header; a bare 405 cannot establish WAF blocking.
+            waf_action = response.headers.get("x-amzn-waf-action")
+            if (response.status_code, waf_action) in {(405, "captcha"), (202, "challenge")}:
+                delay = max(
+                    _FAILURE_COOLDOWN,
+                    _retry_after_seconds(response.headers.get("Retry-After")) or 0.0,
+                )
+                _cooldown_until = time.monotonic() + delay
+                message = (
+                    f"Infoscience HTTP {response.status_code}: WAF {waf_action}; "
+                    f"retry after {delay:.1f}s"
+                )
+                raise ProviderError(message)
             if response.status_code not in {408, 429, 500, 502, 503, 504}:
                 return _response_payload(response)
             reason = f"HTTP {response.status_code}"

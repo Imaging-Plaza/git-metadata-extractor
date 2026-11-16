@@ -359,11 +359,28 @@ accepted body, preserving UUID, role, dates and source evidence. Routing tests
 exercise strict validation and assembly before projection: SHACL alone cannot
 detect an entity placed in the run metadata graph.
 
+If strict validation excludes a Person, dependent memberships are removed even
+when their organization remains. Long email top-level domains and plus addresses
+are accepted by the strict Person contract. Hybrid organization writers normalize
+GitHub handles to profile URLs before strict validation, preserving existing IDs
+and inbound membership references.
+
+The async rule-based Person agent offloads synchronous provider calls to worker
+threads. Its configured fan-out can overlap I/O, and the event loop can process
+cancellation. An already running thread still relies on its provider timeout;
+cancelling the extraction does not forcibly stop that network operation.
+
 Infoscience calls share a process-local request gate and cooldown across worker
 threads. A call has a 30-second total queue/request/retry budget and at most three
 transient attempts; a longer Retry-After is preserved as a cooldown. Optional
 enrichment failures retain base entities and warn. They are not cached as empty
 provider results, and their explicit unavailability prevents pipeline caching.
+
+Public Infoscience searches deliberately omit `INFOSCIENCE_TOKEN`. The helper
+sends it only for an explicit authenticated request; token validity alone does
+not establish permission to search. Responses carrying an explicit AWS WAF
+CAPTCHA/challenge header produce a diagnostic and cooldown, without attempting
+to solve the challenge. An ordinary HTTP 405 remains a distinct permanent error.
 
 See the [original enrichment review](enrichment-fixes-2026-11-13.md) and the
 [membership and availability follow-up](availability-fixes-2026-11-16.md) for
