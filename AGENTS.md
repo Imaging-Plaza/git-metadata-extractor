@@ -788,6 +788,7 @@ The `justfile` is the source of truth. Prefer `just <recipe>` over ad-hoc shell.
 | `just serve-stop` | stop whatever's bound to `:$PORT` |
 | `just test` | fast tests via testmon |
 | `just test-full` | full deterministic test run |
+| `just test-docker` | preferred full V2 check: locked Linux image, no runtime network |
 | `just test-file <path>` | one file |
 | `just lint` / `just type-check` / `just check` | quality gates |
 | `just v2-models-generate` | regenerate Pydantic models from strict schemas |
@@ -959,10 +960,24 @@ artefact. Never expose `_`-prefixed fields in API responses.
   name-based matches. Test ANTs and known legitimate aliases together.
 - Late ROR resolvers must reuse `normalize_organization_identifiers` before
   strict validation. Preserve `identifiers.uuid` when promoting an identity.
+- Late membership writers must maintain the Person's `org:hasMembership` and
+  register the same accepted body in both membership collections. Reconciliation
+  initially populates `reconciled.memberships`; never recreate that entity with
+  a new UUID or source tag just because the entity bucket is empty. Verify strict
+  validation, assembly and source-graph routing together, not only raw SHACL.
 - Contributor coverage is evidence, not an ontology field. Keep partial or
   unavailable results out of the pipeline cache. GIMIE completeness is unknown;
   bounded REST pagination describes linked accounts only. Do not report an
   unavailable lookup as a successful empty contributor list.
+- GitHub's explicit oversized contributor-history refusal permits one recent
+  commits page. Its linked authors are a partial sample, not top contributors or
+  a full history. Keep counts unknown unless independently verified. Generic
+  authorization, quota and Retry-After failures must not trigger this fallback.
+- Infoscience HTTP failures must propagate through the provider without caching
+  empty results. Optional enrichment retains base entities with a warning;
+  explicitly unavailable providers prevent pipeline-cache writes. Preserve the
+  UUID lookup's 404 fallback. The request gate/cooldown is process-local, not a
+  distributed rate limiter.
 
 ## Reporting contract
 

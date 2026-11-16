@@ -5,13 +5,19 @@ Provides async functions to query EPFL's Infoscience repository (DSpace 7.6)
 for publications, authors, labs, and organizational units.
 """
 
+import asyncio
 import logging
+import math
 import os
+import threading
+import time
 from collections import OrderedDict
+from email.utils import parsedate_to_datetime
 from typing import Any, Dict, List, Optional
 
 import httpx
 
+from git_metadata_extractor.providers.base import ProviderError, ProviderNotFoundError
 from git_metadata_extractor.providers.infoscience_models import (
     InfoscienceAuthor,
     InfoscienceOrgUnit,
@@ -25,6 +31,29 @@ logger = logging.getLogger(__name__)
 INFOSCIENCE_BASE_URL = "https://infoscience.epfl.ch/server/api"
 DEFAULT_MAX_RESULTS = 10
 REQUEST_TIMEOUT = 30
+
+# The provider bridge creates event loops in multiple worker threads. A loop-local
+# asyncio.Lock cannot serialize their HTTP calls. Acquire without blocking the
+# event loop, and never delegate acquisition to a thread (cancellation could
+# otherwise leave that thread holding a permit forever).
+_request_gate = threading.Lock()
+_cooldown_until = 0.0
+_sleep = asyncio.sleep
+_MAX_ATTEMPTS = 3
+_FAILURE_COOLDOWN = 30.0
+
+
+def _retry_after_seconds(value: Optional[str]) -> Optional[float]:
+    if not value:
+        return None
+    try:
+        delay = float(value)
+    except ValueError:
+        try:
+            delay = parsedate_to_datetime(value).timestamp() - time.time()
+        except (TypeError, ValueError, OverflowError):
+            return None
+    return max(0.0, delay) if math.isfinite(delay) else None
 
 # Authentication token (optional, for protected endpoints)
 INFOSCIENCE_TOKEN = os.getenv("INFOSCIENCE_TOKEN")
@@ -79,7 +108,7 @@ async def _make_api_request(
     params: Optional[Dict[str, Any]] = None,
     timeout: int = REQUEST_TIMEOUT,
     use_auth: bool = False,
-) -> Optional[Dict[str, Any]]:
+) -> Dict[str, Any]:
     """
     Make an async HTTP request to the Infoscience API.
 
@@ -90,7 +119,11 @@ async def _make_api_request(
         use_auth: Whether to include authentication token if available
 
     Returns:
-        JSON response as dictionary or None on error
+        JSON response as dictionary.
+
+    Raises:
+        ProviderError: Upstream unavailable, invalid response, or exhausted retry
+            budget. Failures must not become cached empty search results.
     """
     url = f"{INFOSCIENCE_BASE_URL}{endpoint}"
 
@@ -100,21 +133,85 @@ async def _make_api_request(
         headers["Authorization"] = f"Bearer {INFOSCIENCE_TOKEN}"
         logger.debug("Using authentication token for request")
 
+    deadline = time.monotonic() + timeout
+    while not _request_gate.acquire(blocking=False):
+        if time.monotonic() >= deadline:
+            message = "Infoscience request queue timed out"
+            raise ProviderError(message)
+        await _sleep(min(0.05, max(0.0, deadline - time.monotonic())))
+
     try:
+        if _cooldown_until > time.monotonic():
+            remaining = _cooldown_until - time.monotonic()
+            message = f"Infoscience temporarily unavailable; retry after {remaining:.1f}s"
+            raise ProviderError(message)
         async with httpx.AsyncClient(timeout=timeout) as client:
-            logger.debug(f"Making API request to {url} with params {params}")
-            response = await client.get(url, params=params, headers=headers)
-            response.raise_for_status()
-            return response.json()
-    except httpx.HTTPStatusError as e:
-        logger.error(f"HTTP error {e.response.status_code} for {url}: {e}")
-        return None
-    except httpx.TimeoutException:
-        logger.error(f"Request timeout for {url}")
-        return None
-    except Exception as e:
-        logger.error(f"Error making API request to {url}: {e}", exc_info=True)
-        return None
+            return await _request_with_retries(client, url, params, headers, deadline)
+    finally:
+        _request_gate.release()
+
+
+def _response_payload(response: httpx.Response) -> Dict[str, Any]:
+    if response.status_code == httpx.codes.NOT_FOUND:
+        message = "Infoscience HTTP 404"
+        raise ProviderNotFoundError(message)
+    if not response.is_success:
+        message = f"Infoscience HTTP {response.status_code}"
+        raise ProviderError(message)
+    try:
+        payload = response.json()
+    except ValueError as exc:
+        message = "Infoscience returned invalid JSON"
+        raise ProviderError(message) from exc
+    if not isinstance(payload, dict):
+        message = "Infoscience returned a non-object JSON response"
+        raise ProviderError(message)
+    return payload
+
+
+async def _request_with_retries(
+    client: httpx.AsyncClient,
+    url: str,
+    params: Optional[Dict[str, Any]],
+    headers: Dict[str, str],
+    deadline: float,
+) -> Dict[str, Any]:
+    # Access is serialized by _request_gate, including across event loops.
+    global _cooldown_until  # noqa: PLW0603
+    for attempt in range(_MAX_ATTEMPTS):
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            message = "Infoscience request budget exhausted"
+            raise ProviderError(message)
+        retry_after = None
+        try:
+            response = await asyncio.wait_for(
+                client.get(url, params=params, headers=headers), timeout=remaining,
+            )
+        except (httpx.TransportError, asyncio.TimeoutError) as exc:
+            reason = type(exc).__name__
+        else:
+            if response.status_code not in {408, 429, 500, 502, 503, 504}:
+                return _response_payload(response)
+            reason = f"HTTP {response.status_code}"
+            retry_after = _retry_after_seconds(response.headers.get("Retry-After"))
+
+        # Preserve the full server deadline, even when it exceeds this call's
+        # wait budget. Later calls fail fast rather than retrying too early or
+        # triggering fallback searches during an outage.
+        delay = max(2.0 ** attempt, retry_after or 0.0)
+        exhausted = attempt == _MAX_ATTEMPTS - 1
+        if exhausted:
+            delay = max(delay, _FAILURE_COOLDOWN)
+        _cooldown_until = time.monotonic() + delay
+        if exhausted or _cooldown_until >= deadline:
+            message = f"Infoscience {reason}; retry after {delay:.1f}s"
+            raise ProviderError(message)
+        logger.warning("Infoscience %s; retrying in %.1fs", reason, delay)
+        await _sleep(delay)
+
+    message = "Infoscience retry budget exhausted"
+    raise ProviderError(message)
 
 
 def _parse_metadata(metadata: Dict[str, Any], field: str) -> Optional[str]:
@@ -699,16 +796,17 @@ async def get_entity_by_uuid(
     """
     logger.info(f"Fetching entity by UUID: {uuid} (type: {entity_type or 'auto'})")
 
-    # Try entity-specific endpoint if type is known
+    # Only a missing resource permits fallback; outages remain failures.
+    endpoints = [f"/core/items/{uuid}"]
     if entity_type:
-        response = await _make_api_request(f"/entities/{entity_type}/{uuid}")
+        endpoints.insert(0, f"/entities/{entity_type}/{uuid}")
+    for endpoint in endpoints:
+        try:
+            response = await _make_api_request(endpoint)
+        except ProviderNotFoundError:
+            continue
         if response:
             return response
-
-    # Fallback to generic items endpoint
-    response = await _make_api_request(f"/core/items/{uuid}")
-    if response:
-        return response
 
     logger.warning(f"Entity not found for UUID: {uuid}")
     return None

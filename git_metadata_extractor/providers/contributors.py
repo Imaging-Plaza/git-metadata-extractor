@@ -13,8 +13,8 @@ class ContributorCoverage(DataModel):
     """Completeness refers to the endpoint's linked GitHub accounts, not all authors."""
 
     status: Literal["complete", "empty", "partial", "unavailable", "unknown"]
-    source: Literal["gimie", "github_rest", "provider"]
-    scope: Literal["linked_github_accounts"] = "linked_github_accounts"
+    source: Literal["gimie", "github_rest", "github_rest_commits", "provider"]
+    scope: Literal["linked_github_accounts", "recent_commit_authors"] = "linked_github_accounts"
     reason: str | None = None
     fallback_reason: str | None = None
     pages_fetched: int = 0

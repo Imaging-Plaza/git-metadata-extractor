@@ -94,10 +94,11 @@ def _record_contributor_coverage(
 ) -> dict[str, Any]:
     coverage = lookup.coverage
     if coverage.status in {"partial", "unavailable"}:
+        sample = "a recent commit sample via " if coverage.scope == "recent_commit_authors" else ""
         warnings.append(
             f"Contributor coverage {coverage.status} for {full_name}: "
             f"{coverage.reason}; {coverage.returned_count} linked account(s) retrieved "
-            f"from {coverage.source} after {coverage.fallback_reason}. "
+            f"from {sample}{coverage.source} after {coverage.fallback_reason}. "
             "Contributor and contribution output is incomplete.",
         )
         record_stage_outcome("partial", reason=f"contributors_{coverage.status}")
@@ -161,10 +162,10 @@ def _enrich_contributors_with_commit_bookends(
     per contributor). Failures degrade silently — the contribution
     agent simply sees `None` for those fields.
 
-    Capped to the top N contributors (`V2_CONTRIBUTOR_BOOKENDS_TOP_N`,
+    Capped to the first N retrieved contributors (`V2_CONTRIBUTOR_BOOKENDS_TOP_N`,
     default 50) to keep jumbo repos within the GitHub auth quota. The
-    upstream contributor list is already ordered by commit count desc,
-    so the top N captures the heaviest contributors. Returns a warning
+    contributors endpoint orders by commit count; a recent commit sample does
+    not establish that ordering. Returns a warning
     string when the cap dropped at least one contributor, otherwise
     `None`.
     """
@@ -204,8 +205,8 @@ def _enrich_contributors_with_commit_bookends(
     skipped = max(0, len(contributors) - top_n)
     if skipped > 0:
         return (
-            f"Commit-bookend enrichment capped at top {top_n} contributors "
-            f"for {full_name}; {skipped} tail contributor(s) left without "
+            f"Commit-bookend enrichment capped at first {top_n} retrieved contributors "
+            f"for {full_name}; {skipped} other contributor(s) left without "
             "first/last/contributions dates "
             "(adjust V2_CONTRIBUTOR_BOOKENDS_TOP_N to widen)."
         )

@@ -69,10 +69,9 @@ from git_metadata_extractor.pipeline.stages.resolve_bio_to_ror import (
     _read_first,
 )
 from git_metadata_extractor.pipeline.stages.resolve_company_to_ror import (
-    _build_membership,
-    _build_org_stub,
     _existing_membership_keys,
     _existing_org_ids,
+    _materialise,
     _person_canonical_id,
 )
 
@@ -209,37 +208,17 @@ def _apply_patch(
     person_id = _person_canonical_id(person)
     if not person_id:
         return 0, 0
-    composite = f"{person_id}__{patch.pulse_ror}"
-    if composite in existing_membership_keys:
-        return 0, 0
-
-    orgs = reconciled.entities.setdefault("organizations", [])
-    memberships = reconciled.entities.setdefault("memberships", [])
-    o_added = 0
-    if patch.pulse_ror not in existing_org_ids:
-        # We don't have a ROR `name` from the LLM patch — `reason`
-        # carries a verbatim bio quote that may or may not be the
-        # canonical name. Use the ROR URL itself so the Org stub is
-        # well-formed; downstream refiners can backfill `schema:name`.
-        stub = _build_org_stub(
-            {"ror_id": patch.pulse_ror, "name": patch.pulse_ror},
-            source=STAGE_SOURCE_TAG,
-        )
-        if stub is None:
-            return 0, 0
-        orgs.append(stub)
-        existing_org_ids.add(patch.pulse_ror)
-        o_added = 1
-
-    memberships.append(
-        _build_membership(
-            person_id=person_id,
-            org_id=patch.pulse_ror,
-            source=STAGE_SOURCE_TAG,
-        ),
+    # The patch has no canonical organization name; its reason is a bio quote.
+    # Reuse the accepted-hit writer so ROR validation and inverse links have
+    # the same contract as the deterministic affiliation producers.
+    return _materialise(
+        reconciled=reconciled,
+        person_id=person_id,
+        hits=[{"ror_id": patch.pulse_ror, "name": patch.pulse_ror}],
+        source=STAGE_SOURCE_TAG,
+        existing_org_ids=existing_org_ids,
+        existing_membership_keys=existing_membership_keys,
     )
-    existing_membership_keys.add(composite)
-    return 1, o_added
 
 
 async def run_resolve_bio_to_ror_llm_stage(

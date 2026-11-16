@@ -216,7 +216,7 @@ def _persons_with_memberships(reconciled: "ReconciledEntities") -> set[str]:
     `skip_if_already_affiliated` flag without re-checking on every
     person."""
     out: set[str] = set()
-    for m in reconciled.entities.get("memberships") or []:
+    for m in [*reconciled.memberships, *reconciled.entities.get("memberships", [])]:
         if not isinstance(m, dict):
             continue
         composite: Any = None

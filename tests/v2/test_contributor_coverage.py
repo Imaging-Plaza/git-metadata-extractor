@@ -86,7 +86,7 @@ def test_missing_gimie_contributors_falls_back_to_rest_with_real_counts(monkeypa
             Response(
                 422,
                 {
-                    "message": "The history or contributor list is too large to list contributors for this repository via the API.",
+                    "message": "Validation Failed",
                 },
             ),
             "github_http_422",

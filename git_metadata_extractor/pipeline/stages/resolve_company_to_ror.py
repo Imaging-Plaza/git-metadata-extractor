@@ -1,6 +1,6 @@
 """Stage: resolve ``_company`` strings to ROR ids and materialise the
 result as proper ``org:Membership`` + ``org:Organization`` entities on
-``reconciled.entities``. The Person itself is left alone — affiliation
+``reconciled.entities`` and link each Membership from its Person — affiliation
 without evidence is modelled as a Membership pointing to an Org, per
 the v2 ontology. The stage does NOT emit a bare ``schema:affiliation``
 triple on Person (that property isn't in the Open Pulse ontology).
@@ -58,8 +58,10 @@ For each accepted resolution the stage pushes:
     (id = ``{personId}__{rorURL}``, type = ``org:Membership``,
     org:organization = ROR URL, org:role / time:hasBeginning /
     time:hasEnd = None) when the same composite isn't already present.
+  * its id in the Person's ``org:hasMembership`` list, including when the
+    Membership already exists but its inverse link is missing.
 
-Both writes are idempotent — re-running the stage on a graph that
+These writes are idempotent — re-running the stage on a graph that
 already contains its earlier output is a no-op.
 """
 from __future__ import annotations
@@ -377,12 +379,43 @@ def _existing_org_ids(reconciled: "ReconciledEntities") -> set[str]:
 
 def _existing_membership_keys(reconciled: "ReconciledEntities") -> set[str]:
     out: set[str] = set()
-    for m in reconciled.entities.get("memberships") or []:
+    for m in [*reconciled.memberships, *reconciled.entities.get("memberships", [])]:
         if isinstance(m, dict):
             mid = m.get("id")
             if isinstance(mid, str):
                 out.add(mid)
     return out
+
+
+def _link_membership(
+    reconciled: ReconciledEntities, person: dict[str, Any], membership_id: str,
+) -> None:
+    """Link an accepted Membership and include it in strict validation.
+
+    Reconciliation populates the separate ``memberships`` collection, while
+    late producers also populate the entity bucket. Reuse the reconciled body
+    when present so its UUID, dates, role and source evidence survive assembly.
+    """
+    bucket = reconciled.entities.setdefault("memberships", [])
+    membership = next(
+        m for m in [*reconciled.memberships, *bucket] if m.get("id") == membership_id
+    )
+    for collection in (reconciled.memberships, bucket):
+        matches = [i for i, m in enumerate(collection) if m.get("id") == membership_id]
+        if matches:
+            for index in matches:
+                collection[index] = membership
+        else:
+            collection.append(membership)
+    refs = person.get("org:hasMembership")
+    if not isinstance(refs, list):
+        refs = [refs] if refs else []
+        person["org:hasMembership"] = refs
+    if not any(
+        (ref.get("@id") if isinstance(ref, dict) else ref) == membership_id
+        for ref in refs
+    ):
+        refs.append(membership_id)
 
 
 def _materialise(
@@ -398,6 +431,15 @@ def _materialise(
     ``(memberships_added, organizations_added)``. Mutates ``reconciled``
     in place; updates the existing-id sets so within a single stage
     invocation later persons don't re-add the same org."""
+    person = next(
+        (
+            p for p in reconciled.entities.get("persons", [])
+            if isinstance(p, dict) and _person_canonical_id(p) == person_id
+        ),
+        None,
+    )
+    if person is None:
+        return 0, 0
     orgs = reconciled.entities.setdefault("organizations", [])
     memberships = reconciled.entities.setdefault("memberships", [])
     m_added = 0
@@ -420,6 +462,7 @@ def _materialise(
             )
             existing_membership_keys.add(composite)
             m_added += 1
+        _link_membership(reconciled, person, composite)
     return m_added, o_added
 
 
@@ -507,6 +550,7 @@ async def run_resolve_company_to_ror_stage(
                     existing_membership_keys.add(composite)
                     memberships_added += 1
                     resolved_persons.add(person_id)
+                _link_membership(reconciled, person, composite)
 
         raw_companies = _read_company(person)
         if not raw_companies:

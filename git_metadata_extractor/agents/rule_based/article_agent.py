@@ -771,6 +771,7 @@ class ArticleAgentV2:
         providers: ProviderSet,
     ) -> AgentResult:
         warnings: list[str] = []
+        unavailable_providers: list[str] = []
         queries = self.build_query_blend(context)
 
         max_unresolved_authors = context.get("max_unresolved_article_authors")
@@ -782,7 +783,7 @@ class ArticleAgentV2:
                 data={},
                 warnings=["Infoscience provider not configured for article enrichment"],
                 raw_output={},
-                stats={"queries": queries, "articles": []},
+                stats={"queries": queries, "articles": [], "unavailable_providers": unavailable_providers},
             )
 
         if not queries:
@@ -799,6 +800,7 @@ class ArticleAgentV2:
                 publications = providers.infoscience.search_publications(query)
             except Exception as exc:  # noqa: BLE001
                 _append_unique(warnings, f"Infoscience publication search failed for '{query}': {exc}")
+                _append_unique(unavailable_providers, "infoscience")
                 continue
 
             raw_candidates.extend(
@@ -817,7 +819,7 @@ class ArticleAgentV2:
                 data={},
                 warnings=warnings,
                 raw_output={},
-                stats={"queries": queries, "articles": []},
+                stats={"queries": queries, "articles": [], "unavailable_providers": unavailable_providers},
             )
 
         person_lookup, authority_lookup = _build_person_lookup(
@@ -992,6 +994,7 @@ class ArticleAgentV2:
             raw_output=primary_raw_output,
             stats={
                 "queries": list(queries),
+                "unavailable_providers": unavailable_providers,
                 "raw_candidate_count": len(raw_candidates),
                 "ranked_candidate_count": len(ranked_candidates),
                 "articles": deepcopy(validated_articles),

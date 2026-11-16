@@ -1,0 +1,23 @@
+# Shared test harness: use either repository as the build context.
+FROM ghcr.io/astral-sh/uv:python3.12-bookworm
+
+ENV UV_PROJECT_ENVIRONMENT=/opt/test-venv \
+    UV_LINK_MODE=copy \
+    PATH="/opt/test-venv/bin:$PATH" \
+    PYTHONPATH=/app \
+    PYTHONDONTWRITEBYTECODE=1
+WORKDIR /app
+ARG TEST_EXTRAS="--extra dev --extra docs"
+
+COPY pyproject.toml uv.lock README.md ./
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --locked --no-install-project $TEST_EXTRAS
+COPY . .
+# Windows build contexts mark ordinary files executable. Normalize Python files
+# so Linux lint checks see the same modes as a Git checkout.
+RUN find /app -type f -name '*.py' -exec chmod 0644 {} +
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --locked --no-editable $TEST_EXTRAS
+
+ENTRYPOINT ["python", "-m", "pytest"]
+CMD ["tests/v2", "-q", "-k", "not real_provider_call", "--no-cov", "--disable-warnings", "--tb=short"]

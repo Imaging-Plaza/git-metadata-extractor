@@ -18,7 +18,7 @@ from git_metadata_extractor.canonicalization.github import (
 from git_metadata_extractor.canonicalization.infoscience import infoscience_person_iri
 from git_metadata_extractor.canonicalization.orcid import orcid_iri
 from git_metadata_extractor.mapping import map_fields
-from git_metadata_extractor.providers.base import ProviderNotFoundError
+from git_metadata_extractor.providers.base import ProviderError, ProviderNotFoundError
 
 HASH_LENGTH = 12
 HASHED_LOCAL_PART_PATTERN = re.compile(r"^[0-9a-f]{12}$|^[0-9a-f]{64}$", re.IGNORECASE)
@@ -283,6 +283,7 @@ class PersonAgentV2:
         providers: ProviderSet,
     ) -> AgentResult:
         warnings: list[str] = []
+        unavailable_providers: list[str] = []
         username = _resolve_username(context)
         github_user = providers.github.get_user(username)
 
@@ -321,25 +322,30 @@ class PersonAgentV2:
                 or github_user.get("name")
                 or username
             )
-            infoscience_results = providers.infoscience.search_person(str(search_query))
-            # Acceptance is gated on ORCID equality or name-token overlap
-            # against the GitHub profile name; without that, an opaque
-            # github handle ("3C111", "gabyx") would resolve to whichever
-            # person Infoscience scores highest for that string, dragging
-            # phantom affiliations along. See `_pick_best_infoscience_match`
-            # for the rule.
-            candidate_name = github_user.get("name") or context.get("person_query")
-            infoscience_match = _pick_best_infoscience_match(
-                infoscience_results,
-                candidate_name=candidate_name if isinstance(candidate_name, str) else None,
-                candidate_orcid=orcid_identifier_hint,
-            )
-            if infoscience_results and infoscience_match is None:
-                warnings.append(
-                    f"Infoscience search returned {len(infoscience_results)} hits for "
-                    f"{search_query!r} but none confirmed by ORCID or name overlap; "
-                    "skipping enrichment to avoid phantom affiliations.",
+            try:
+                infoscience_results = providers.infoscience.search_person(str(search_query))
+            except ProviderError as exc:
+                warnings.append(f"Infoscience person enrichment failed: {exc}")
+                unavailable_providers.append("infoscience")
+            else:
+                # Acceptance is gated on ORCID equality or name-token overlap
+                # against the GitHub profile name; without that, an opaque
+                # github handle ("3C111", "gabyx") would resolve to whichever
+                # person Infoscience scores highest for that string, dragging
+                # phantom affiliations along. See `_pick_best_infoscience_match`
+                # for the rule.
+                candidate_name = github_user.get("name") or context.get("person_query")
+                infoscience_match = _pick_best_infoscience_match(
+                    infoscience_results,
+                    candidate_name=candidate_name if isinstance(candidate_name, str) else None,
+                    candidate_orcid=orcid_identifier_hint,
                 )
+                if infoscience_results and infoscience_match is None:
+                    warnings.append(
+                        f"Infoscience search returned {len(infoscience_results)} hits for "
+                        f"{search_query!r} but none confirmed by ORCID or name overlap; "
+                        "skipping enrichment to avoid phantom affiliations.",
+                    )
         else:
             warnings.append("Infoscience provider not configured for person enrichment")
 
@@ -578,5 +584,5 @@ class PersonAgentV2:
             data=validated_payload,
             warnings=warnings,
             raw_output=raw_output,
-            stats={"derivation": derivation_stats},
+            stats={"derivation": derivation_stats, "unavailable_providers": unavailable_providers},
         )

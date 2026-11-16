@@ -15,7 +15,7 @@ from git_metadata_extractor.canonicalization.organization_evidence import (
     organization_website_matches,
 )
 from git_metadata_extractor.mapping import load_policy, map_fields
-from git_metadata_extractor.providers.base import ProviderNotFoundError
+from git_metadata_extractor.providers.base import ProviderError, ProviderNotFoundError
 
 
 def _resolve_org_name(context: dict[str, Any]) -> str:
@@ -183,6 +183,7 @@ class OrganizationAgentV2:
         providers: ProviderSet,
     ) -> AgentResult:
         warnings: list[str] = []
+        unavailable_providers: list[str] = []
         org_name = _resolve_org_name(context)
         github_lookup_enabled = context.get("github_lookup_enabled")
         if not isinstance(github_lookup_enabled, bool):
@@ -218,16 +219,21 @@ class OrganizationAgentV2:
         infoscience_match: dict[str, Any] | None = None
         if providers.infoscience:
             infoscience_query = context.get("infoscience_query") or github_org.get("name") or org_name
-            infoscience_results = providers.infoscience.search_orgunit(str(infoscience_query))
-            infoscience_match = _pick_best_orgunit_match(
-                infoscience_results,
-                candidate_name=str(infoscience_query),
-            )
-            if infoscience_results and infoscience_match is None:
-                warnings.append(
-                    f"Infoscience orgunit search returned {len(infoscience_results)} hits for "
-                    f"{infoscience_query!r} but none share a name token; skipping enrichment.",
+            try:
+                infoscience_results = providers.infoscience.search_orgunit(str(infoscience_query))
+            except ProviderError as exc:
+                warnings.append(f"Infoscience organization enrichment failed: {exc}")
+                unavailable_providers.append("infoscience")
+            else:
+                infoscience_match = _pick_best_orgunit_match(
+                    infoscience_results,
+                    candidate_name=str(infoscience_query),
                 )
+                if infoscience_results and infoscience_match is None:
+                    warnings.append(
+                        f"Infoscience orgunit search returned {len(infoscience_results)} hits for "
+                        f"{infoscience_query!r} but none share a name token; skipping enrichment.",
+                    )
         else:
             warnings.append("Infoscience provider not configured for organization enrichment")
 
@@ -456,5 +462,5 @@ class OrganizationAgentV2:
             data=validated_payload,
             warnings=warnings,
             raw_output=raw_output,
-            stats={"derivation": derivation_stats},
+            stats={"derivation": derivation_stats, "unavailable_providers": unavailable_providers},
         )

@@ -105,6 +105,10 @@ verification; its index mount was read-only and extraction store writes disabled
 
 ## Remaining membership linkage issue
 
+**Follow-up:** the [November 16 repair](availability-fixes-2026-11-16.md) fixes
+the producer links and validation handoff. The measurements below describe the
+retained November 13 artifacts; those historical outputs are unchanged.
+
 The audit also found a preexisting inverse-link defect: late affiliation
 resolvers create Membership nodes without adding them to the Person's
 `org:hasMembership`. Raw graph routing uses that inverse link to inherit the

@@ -156,6 +156,11 @@ test:
 test-full:
     .venv/bin/python -m pytest tests/v2/ -q -n auto --dist=loadfile -m 'not live_provider and not llm_integration'
 
+# Run the full V2 suite in Linux with locked dependencies and no upstream access.
+test-docker:
+    docker build -f tools/image/Dockerfile.test -t gme-test:local .
+    docker run --rm --network none gme-test:local
+
 # Run tests with coverage
 test-coverage:
     .venv/bin/python -m pytest tests/v2/ --cov=git_metadata_extractor --cov-report=html --cov-report=term -m 'not live_provider and not llm_integration'

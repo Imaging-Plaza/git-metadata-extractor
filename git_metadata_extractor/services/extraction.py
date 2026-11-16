@@ -238,6 +238,8 @@ async def _execute(  # noqa: C901, PLR0912, PLR0913, PLR0915 - preserve relocate
             # Older responses can contain silent contributor failures, without
             # coverage metadata or warnings. Do not replay those as successes.
             contributor_coverage_version=1,
+            # Older graphs could silently freeze optional-provider outages.
+            provider_availability_version=1,
             canonical_output=settings.canonical_output_enabled(),
             substrate_enabled=runtime_config.substrate_enabled(),
             execution_profile=(execution_profile or {}).get("fingerprint"),
@@ -511,6 +513,10 @@ async def _execute(  # noqa: C901, PLR0912, PLR0913, PLR0915 - preserve relocate
         pipeline_cache is not None
         and pipeline_cache_key is not None
         and not _has_degraded_contributor_coverage(gathered_context)
+        and not any(
+            result.stats.get("unavailable_providers")
+            for result in pipeline_result.agent_results.values()
+        )
     ):
         try:
             pipeline_cache.set(

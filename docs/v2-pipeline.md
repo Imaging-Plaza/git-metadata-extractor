@@ -346,5 +346,25 @@ cache, so subsequent requests can recover. Upstream limits can still leave a
 minimal graph; inspect warnings rather than interpreting missing contributors as
 proof that a repository has none.
 
-Measured results and the remaining inverse-membership routing issue are recorded
-in the [enrichment follow-up](enrichment-fixes-2026-11-13.md).
+For GitHub's explicit oversized contributor-history refusal only, one recent
+commits page supplies linked authors. Coverage remains partial with scope
+`recent_commit_authors`; these are neither all authors nor a ranking by total
+contributions. Sampled identities have unknown counts unless another lookup
+verifies them. Authentication failures, exhausted quota and Retry-After responses
+do not trigger this fallback.
+
+Late affiliation producers now register memberships for strict validation and
+link them from their Person. Both membership collections reuse the original
+accepted body, preserving UUID, role, dates and source evidence. Routing tests
+exercise strict validation and assembly before projection: SHACL alone cannot
+detect an entity placed in the run metadata graph.
+
+Infoscience calls share a process-local request gate and cooldown across worker
+threads. A call has a 30-second total queue/request/retry budget and at most three
+transient attempts; a longer Retry-After is preserved as a cooldown. Optional
+enrichment failures retain base entities and warn. They are not cached as empty
+provider results, and their explicit unavailability prevents pipeline caching.
+
+See the [original enrichment review](enrichment-fixes-2026-11-13.md) and the
+[membership and availability follow-up](availability-fixes-2026-11-16.md) for
+measured results and verification limits.

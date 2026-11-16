@@ -1,0 +1,25 @@
+# Allow only repository inputs; exclude credentials, indices and host venvs.
+**
+!pyproject.toml
+!uv.lock
+!README.md
+!LICENSE
+!AGENTS.md
+!justfile
+!mkdocs.yml
+!git_metadata_extractor/**
+!open_pulse_sources/**
+!tests/**
+!config/**
+!scripts/**
+!tools/**
+!docs/**
+!examples/**
+!vendor/**
+**/__pycache__/**
+**/*.pyc
+**/.env
+**/.env.*
+**/.git/**
+**/.venv/**
+**/*.egg-info/**
