@@ -13,6 +13,10 @@ The [2026-11-13 live results](sources-benchmark-results-2026-11-13.md) contain a
 40 rule-based/hybrid outcomes and the reviewed citation, ownership and coverage
 findings.
 
+The [2026-11-16 Docker follow-up](sources-benchmark-results-2026-11-16.md) reruns
+the full matrix after the enrichment fixes, records restored citations and source
+availability, and identifies the remaining timeout and validation/routing defects.
+
 ## Run against your sources service
 
 Use the normal development environment with GME's Python dependencies and the

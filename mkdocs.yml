@@ -60,6 +60,7 @@ nav:
       - Sources Benchmark:
           - Run and Review: sources-benchmark.md
           - Live Results (2026-11-13): sources-benchmark-results-2026-11-13.md
+          - Docker Follow-up (2026-11-16): sources-benchmark-results-2026-11-16.md
           - Enrichment Corrections: enrichment-fixes-2026-11-13.md
           - Membership and Availability: availability-fixes-2026-11-16.md
       - Documentation Publishing: publishing.md
