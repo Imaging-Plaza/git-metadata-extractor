@@ -13,8 +13,9 @@ from selenium import webdriver
 from selenium.webdriver.firefox.options import Options as FirefoxOptions
 from selenium.webdriver.support.ui import WebDriverWait
 
-from git_metadata_extractor.providers.cache import ProviderCache
 from git_metadata_extractor.observation.query_log import record_query
+from git_metadata_extractor.providers import sources_service
+from git_metadata_extractor.providers.cache import ProviderCache
 
 if TYPE_CHECKING:
     pass
@@ -112,6 +113,17 @@ def fetch_link_content_via_selenium(
 ) -> dict[str, Any]:
     """Fetch rendered page content from a URL via Selenium Grid."""
 
+    if sources_service.current_source_mode() == "snapshot":
+        sources_service.record_source_gap("snapshot: live browser retrieval is unavailable")
+        return {
+            "url": url,
+            "fetched": False,
+            "final_url": None,
+            "title": None,
+            "text_excerpt": None,
+            "content_length": 0,
+            "error": "snapshot_operation_unsupported",
+        }
     logger.info("tool call: fetch_link_content_via_selenium — url=%r", url)
     record_query(service="selenium.fetch_link_content", query=str(url) if url else "")
     normalized_url = url.strip() if isinstance(url, str) else ""
@@ -196,6 +208,8 @@ def make_fetch_link_content_tool(cache: ProviderCache | None = None) -> Tool:
         url: str,
         max_chars: int = DEFAULT_MAX_CHARS,
     ) -> dict[str, Any]:
+        if sources_service.current_source_mode() == "snapshot":
+            return fetch_link_content_via_selenium(url, max_chars)
         normalized_url = url.strip() if isinstance(url, str) else ""
         if not normalized_url or not _is_http_url(normalized_url):
             return fetch_link_content_via_selenium(url, max_chars)

@@ -12,7 +12,7 @@ from typing import Any, Callable
 from pydantic import Field, PrivateAttr
 
 from git_metadata_extractor.agents import ProviderSet
-from git_metadata_extractor.config import V2Config
+from git_metadata_extractor.config import SourceMode, V2Config, resolve_source_mode
 from git_metadata_extractor.models import InternalModel
 from git_metadata_extractor.providers.base import (
     GitHubProvider,
@@ -102,6 +102,11 @@ from git_metadata_extractor.providers.ror_rag import (
 )
 from git_metadata_extractor.providers.ror_rag import (
     build_default_provider as build_default_ror_rag_provider,
+)
+from git_metadata_extractor.providers.snapshot import (
+    SnapshotInfoscienceProvider,
+    SnapshotORCIDProvider,
+    SnapshotRORProvider,
 )
 from git_metadata_extractor.providers.snsf_rag import (
     SnsfRagProvider,
@@ -358,6 +363,7 @@ def _resolve_registered_provider(state, registration):
 def _build_index_providers(state) -> dict:
     """Compose HTTP adapters; an unconfigured service has no index backend."""
     remote = getattr(state, "v2_sources_provider", None)
+    _reject_snapshot_provider(remote)
     url = os.getenv("SOURCES_API_URL", "").strip()
     if not url and not isinstance(remote, SourcesClient):
         return {}
@@ -372,6 +378,7 @@ def _build_index_providers(state) -> dict:
     for spec in RAG_PROVIDERS:
         attribute = f"v2_{spec.name}_provider"
         existing = getattr(state, attribute, None)
+        _reject_snapshot_provider(existing)
         if isinstance(existing, spec.expected_type):
             values[spec.name] = existing
             continue
@@ -391,19 +398,30 @@ def build_provider_resources(  # noqa: PLR0913 - provider composition controls
     cache: Any = _UNSET_CACHE,
     include_user_repositories: bool | None = None,
     include_organization_repositories: bool | None = None,
+    source_mode: SourceMode | None = None,
 ) -> ProviderResources:
     """Injected providers are borrowed; primary clients are owned per call.
 
     RAG clients built here belong to state and are closed by its owner at shutdown.
     No HTTP objects or event-loop mutation are required to compose the bundle.
     """
+    source_mode = resolve_source_mode(source_mode)
     injected = getattr(state, "v2_provider_set", None)
     if isinstance(injected, ProviderSet):
+        validate_provider_source_mode(injected, source_mode)
         return ProviderResources(bundle=injected)
     if use_mock is None:
         use_mock = _is_truthy_env(os.getenv("V2_USE_MOCK_PROVIDERS", "true"))
     if cache is _UNSET_CACHE:
         cache = None if use_mock else _resolve_provider_cache(state)
+    if source_mode == "snapshot":
+        return _build_snapshot_resources(
+            state, use_mock=use_mock, cache=cache, include_rag=include_rag,
+            include_user_repositories=not repository_scope
+            if include_user_repositories is None else include_user_repositories,
+            include_organization_repositories=not repository_scope
+            if include_organization_repositories is None else include_organization_repositories,
+        )
     factories = {
         "github": (
             GitHubProvider,
@@ -452,6 +470,7 @@ def build_provider_resources(  # noqa: PLR0913 - provider composition controls
     try:
         for name, (expected_type, factory) in factories.items():
             override = getattr(state, f"v2_{name}_provider", None)
+            _reject_snapshot_provider(override)
             if isinstance(override, expected_type):
                 values[name] = override
             else:
@@ -464,6 +483,93 @@ def build_provider_resources(  # noqa: PLR0913 - provider composition controls
         # Primary factories are synchronous and own synchronous HTTP clients.
         close_resources_sync(owned)
         raise
+    return ProviderResources(bundle=ProviderSet(**values), owned=owned)
+
+
+def _reject_snapshot_provider(provider) -> None:
+    if (
+        isinstance(provider, (SnapshotRORProvider, SnapshotORCIDProvider, SnapshotInfoscienceProvider))
+        or getattr(provider, "source_mode", None) == "snapshot"
+        or getattr(getattr(provider, "_client", None), "source_mode", None) == "snapshot"
+    ):
+        message = "Snapshot provider cannot be reused in direct source_mode"
+        raise ValueError(message)
+
+
+def validate_provider_source_mode(bundle: ProviderSet, mode: SourceMode) -> None:
+    """Refuse provider bundles that cross the selected scholarly source boundary."""
+    remote = bundle.sources
+    if getattr(remote, "source_mode", "direct") != mode:
+        message = "Injected provider source_mode does not match the extraction"
+        raise ValueError(message)
+    if mode != "snapshot":
+        for name in type(bundle).model_fields:
+            _reject_snapshot_provider(getattr(bundle, name))
+        return
+    primary_types = {
+        "ror": SnapshotRORProvider,
+        "orcid": SnapshotORCIDProvider,
+        "infoscience": SnapshotInfoscienceProvider,
+    }
+    for name, expected in primary_types.items():
+        provider = getattr(bundle, name)
+        if not isinstance(provider, expected) or provider.client is not remote:
+            message = "Injected snapshot source_mode requires matching scholarly snapshot adapters"
+            raise ValueError(message)
+    if bundle.package_registry is not None:
+        message = "Injected snapshot source_mode cannot use live package registries"
+        raise ValueError(message)
+    for spec in RAG_PROVIDERS:
+        provider = getattr(bundle, spec.name)
+        if provider is not None and (
+            not isinstance(provider, spec.expected_type)
+            or provider._client is not remote  # noqa: SLF001 - composition verifies client isolation
+        ):
+            message = "Injected snapshot source_mode requires matching retrieval clients"
+            raise ValueError(message)
+
+
+def _build_snapshot_resources(  # noqa: PLR0913 - same composition controls as direct mode
+    state, *, use_mock, cache, include_rag,
+    include_user_repositories, include_organization_repositories,
+) -> ProviderResources:
+    url = os.getenv("SOURCES_API_URL", "").strip()
+    if not url:
+        message = "SOURCES_API_URL is required for snapshot source_mode"
+        raise ValueError(message)
+    github = getattr(state, "v2_github_provider", None)
+    owned = []
+    if not isinstance(github, GitHubProvider):
+        github = MockGitHubProvider() if use_mock else RealGitHubProvider(
+            include_user_repositories=include_user_repositories,
+            include_organization_repositories=include_organization_repositories,
+            cache=cache,
+        )
+        owned.append(github)
+    try:
+        # Create the asynchronous pool after potentially failing primary factories.
+        # Scholarly adapters below only bind this client; they perform no I/O.
+        remote = SourcesClient(
+            url, os.getenv("SOURCES_API_TOKEN", ""),
+            timeout=float(os.getenv("SOURCES_API_TIMEOUT_SECONDS", "30")),
+            source_mode="snapshot",
+        )
+    except BaseException:
+        close_resources_sync(owned)
+        raise
+    owned.append(remote)
+    values = {
+        "github": github, "sources": remote,
+        "ror": SnapshotRORProvider(remote),
+        "orcid": SnapshotORCIDProvider(remote),
+        "infoscience": SnapshotInfoscienceProvider(remote),
+    }
+    if include_rag:
+        values.update({
+            spec.name: spec.expected_type(client=remote)
+            for spec in RAG_PROVIDERS
+            if _is_truthy_env(os.getenv(spec.env_var, "true"))
+        })
     return ProviderResources(bundle=ProviderSet(**values), owned=owned)
 
 

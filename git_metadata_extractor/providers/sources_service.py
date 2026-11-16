@@ -1,7 +1,7 @@
 """Typed read-only client for open-pulse-sources' published HTTP endpoints.
 
-Search and manifest are supported. Record/chunk hydration and source-build
-metadata are not guaranteed by the current server contract.
+Direct retrieval preserves the existing service contract. Snapshot retrieval
+also observes dataset identities and keeps them scoped to one extraction.
 """
 
 from __future__ import annotations
@@ -10,6 +10,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from hashlib import sha256
 from http import HTTPStatus
+from threading import Lock
 from typing import Annotated, Literal
 from urllib.parse import urlsplit
 
@@ -24,6 +25,7 @@ from pydantic import (
 )
 
 from git_metadata_extractor.models import DataModel
+from git_metadata_extractor.providers.base import ProviderError, ProviderNotFoundError
 
 IndexName = Annotated[str, Field(pattern=r"^[a-z][a-z0-9_]*$", max_length=100)]
 _INDEX = TypeAdapter(IndexName)
@@ -32,6 +34,46 @@ MAX_TIMEOUT_SECONDS = 300
 MAX_VERSION_LENGTH = 100
 _backend: ContextVar[str | None] = ContextVar("sources_backend", default=None)
 _scope: ContextVar[dict | None] = ContextVar("sources_run", default=None)
+
+
+class SnapshotDescriptor(DataModel):
+    source: IndexName
+    id: str = Field(min_length=1, max_length=512)
+    version: str = Field(min_length=1, max_length=512)
+
+
+class _SnapshotAvailability(SnapshotDescriptor):
+    available: bool
+    methods: list[str]
+
+
+class _SnapshotManifest(DataModel):
+    fingerprint: str = Field(min_length=1, max_length=200)
+    sources: dict[IndexName, _SnapshotAvailability]
+
+
+def current_source_mode() -> Literal["direct", "snapshot"]:
+    state = _scope.get()
+    return state["mode"] if state else "direct"
+
+
+def record_source_gap(message: str) -> None:
+    state = _scope.get()
+    if state is not None and message not in state["gaps"]:
+        state["gaps"].append(message)
+
+
+def current_source_gaps() -> list[str]:
+    state = _scope.get()
+    return list(state["gaps"]) if state else []
+
+
+def current_source_snapshots() -> list[SnapshotDescriptor]:
+    state = _scope.get()
+    if not state:
+        return []
+    with state["metadata_lock"]:
+        return list(state["snapshots"].values())
 
 
 def current_sources_client() -> SourcesClient | None:
@@ -51,7 +93,10 @@ def current_sources_fingerprint() -> str | None:
 @contextmanager
 def sources_scope(client: SourcesClient | None):
     token = _backend.set(client.cache_identity if client is not None else None)
-    scope_token = _scope.set({"client": client, "version": None, "conflict": False})
+    scope_token = _scope.set({"client": client, "version": None, "conflict": False,
+                            "mode": getattr(client, "source_mode", "direct"),
+                            "gaps": [], "snapshots": {}, "snapshot_conflicts": set(), "expected_snapshots": None,
+                            "metadata_lock": Lock()})
     try:
         yield
     finally:
@@ -138,23 +183,27 @@ class SourceRetrievalResult(DataModel):
 class _OperationResponse(DataModel):
     data: dict[str, JsonValue]
     service_version: str | None = Field(default=None, max_length=100)
+    snapshots: list[SnapshotDescriptor] = Field(default_factory=list)
 
 
 class _RetrievalResponse(DataModel):
     data: dict[str, JsonValue] | list[dict[str, JsonValue]]
     service_version: str | None = Field(default=None, max_length=100)
+    snapshots: list[SnapshotDescriptor] = Field(default_factory=list)
 
 
 class SourcesClient:
-    """Owns one asynchronous HTTP pool; never opens index stores or embeds text."""
+    """Owns HTTP pools, including a sync snapshot seam; never opens index files."""
 
-    def __init__(
+    def __init__(  # noqa: PLR0913 - explicit transport configuration
         self,
         base_url: str,
         token: str,
         *,
         timeout: float = 30,
         transport: httpx.AsyncBaseTransport | None = None,
+        sync_transport: httpx.BaseTransport | None = None,
+        source_mode: Literal["direct", "snapshot"] = "direct",
     ) -> None:
         parsed = urlsplit(base_url)
         if (
@@ -181,43 +230,135 @@ class SourcesClient:
             follow_redirects=False,
             transport=transport,
         )
-        self.cache_identity = sha256(base_url.rstrip("/").encode()).hexdigest()
+        self.source_mode = TypeAdapter(Literal["direct", "snapshot"]).validate_python(source_mode)
+        self._identity_seed = base_url.rstrip("/") + (":snapshot" if self.source_mode == "snapshot" else "")
+        self.cache_identity = sha256(self._identity_seed.encode()).hexdigest()
+        self._sync_client = httpx.Client(
+            base_url=base_url.rstrip("/") + "/",
+            headers={"Authorization": f"Bearer {token}"}, timeout=timeout,
+            follow_redirects=False, transport=sync_transport,
+        ) if self.source_mode == "snapshot" else None
 
     async def aclose(self) -> None:
         await self._client.aclose()
+        if self._sync_client is not None:
+            self._sync_client.close()
+
+    def _observe_snapshots(self, snapshots: list[SnapshotDescriptor]) -> None:
+        state = _scope.get()
+        if not state or state["client"] is not self:
+            return
+        # Provider worker threads inherit this same scope dictionary. Comparison,
+        # conflict marking and attribution must be one atomic observation.
+        with state["metadata_lock"]:
+            for snapshot in snapshots:
+                source = snapshot.source
+                if source in state["snapshot_conflicts"]:
+                    continue
+                previous = state["snapshots"].get(source)
+                expected = state["expected_snapshots"]
+                if (previous is not None and previous != snapshot) or (expected is not None and expected.get(source) != snapshot):
+                    state["snapshots"].pop(source, None)
+                    state["snapshot_conflicts"].add(source)
+                    record_source_gap(f"Snapshot identity changed during extraction: {source}")
+                else:
+                    state["snapshots"][source] = snapshot
+
+    def _require_snapshots(self, snapshots: list[SnapshotDescriptor]) -> None:
+        if self.source_mode == "snapshot" and not snapshots:
+            message = "Snapshot response omitted dataset identity"
+            record_source_gap(message)
+            raise ValueError(message)
+
+    async def prepare_snapshots(self) -> bool:
+        if self.source_mode != "snapshot":
+            return True
+        response = await self._request("GET", "v2/snapshots/manifest")
+        if isinstance(response, SourceResult):
+            return False
+        try:
+            parsed = _OperationResponse.model_validate_json(response.content)
+            manifest = _SnapshotManifest.model_validate(parsed.data)
+        except ValidationError:
+            record_source_gap("Snapshot manifest is invalid; extraction cache disabled")
+            return False
+        self.cache_identity = sha256(f"{self._identity_seed}:{manifest.fingerprint}".encode()).hexdigest()
+        state = _scope.get()
+        if state and state["client"] is self:
+            _backend.set(self.cache_identity)
+            state["expected_snapshots"] = {
+                source: SnapshotDescriptor(source=source, id=item.id, version=item.version)
+                for source, item in manifest.sources.items() if item.available
+            }
+        return True
+
+    def snapshot_lookup(self, provider: str, method: str, payload: dict):
+        """Synchronous provider seam; callers run blocking providers in worker threads."""
+        provider, method = _INDEX.validate_python(provider), _INDEX.validate_python(method)
+        if self._sync_client is None:
+            message = "Snapshot lookup requires snapshot mode"
+            raise ProviderError(message)
+        try:
+            response = self._sync_client.post(f"v2/snapshots/{provider}/{method}", json=payload)
+            if response.status_code == HTTPStatus.NOT_FOUND:
+                message = f"Snapshot record not found: {provider}/{method}"
+                raise ProviderNotFoundError(message)
+            response.raise_for_status()
+            parsed = _RetrievalResponse.model_validate_json(response.content)
+            self._require_snapshots(parsed.snapshots)
+        except (httpx.HTTPError, ValueError) as exc:
+            message = f"Snapshot lookup unavailable: {provider}/{method}"
+            record_source_gap(message)
+            raise ProviderError(message) from exc
+        self._observe_version(parsed.service_version)
+        self._observe_snapshots(parsed.snapshots)
+        return parsed.data
 
     def _observe_version(self, version: str | None) -> None:
         state = _scope.get()
-        if not version or version == "unknown" or not state or state["client"] is not self or state["conflict"]:
+        if not version or version == "unknown" or not state or state["client"] is not self:
             return
-        if state["version"] is not None and state["version"] != version:
-            state["version"], state["conflict"] = None, True
-        else:
-            state["version"] = version
+        with state["metadata_lock"]:
+            if state["conflict"]:
+                return
+            if state["version"] is not None and state["version"] != version:
+                state["version"], state["conflict"] = None, True
+            else:
+                state["version"] = version
 
     async def operation(self, name: str, payload: dict) -> SourceOperationResult:
         name = _OPERATION.validate_python(name)
-        response = await self._request("POST", f"v2/extractor/{name}", json=payload)
+        prefix = "v2/snapshots/extractor" if self.source_mode == "snapshot" else "v2/extractor"
+        response = await self._request("POST", f"{prefix}/{name}", json=payload)
         if isinstance(response, SourceResult):
             return SourceOperationResult(status=response.status, error=response.error)
         try:
             parsed = _OperationResponse.model_validate_json(response.content)
-        except ValidationError:
+            self._require_snapshots(parsed.snapshots)
+        except ValueError:
+            if self.source_mode == "snapshot":
+                record_source_gap(f"Snapshot operation returned an invalid response: {name}")
             return SourceOperationResult(status="invalid_response", error="Sources response violates the operation contract")
         self._observe_version(parsed.service_version)
-        return SourceOperationResult(status="ok", **parsed.model_dump())
+        self._observe_snapshots(parsed.snapshots)
+        return SourceOperationResult(status="ok", **parsed.model_dump(exclude={"snapshots"}))
 
     async def retrieve(self, provider: str, method: str, payload: dict) -> SourceRetrievalResult:
         provider, method = _INDEX.validate_python(provider), _INDEX.validate_python(method)
-        response = await self._request("POST", f"v2/retrieval/{provider}/{method}", json=payload)
+        prefix = "v2/snapshots" if self.source_mode == "snapshot" else "v2/retrieval"
+        response = await self._request("POST", f"{prefix}/{provider}/{method}", json=payload)
         if isinstance(response, SourceResult):
             return SourceRetrievalResult(status=response.status, error=response.error)
         try:
             parsed = _RetrievalResponse.model_validate_json(response.content)
-        except ValidationError:
+            self._require_snapshots(parsed.snapshots)
+        except ValueError:
+            if self.source_mode == "snapshot":
+                record_source_gap(f"Snapshot retrieval returned an invalid response: {provider}/{method}")
             return SourceRetrievalResult(status="invalid_response", error="Sources response violates the retrieval contract")
         self._observe_version(parsed.service_version)
-        return SourceRetrievalResult(status="ok", **parsed.model_dump())
+        self._observe_snapshots(parsed.snapshots)
+        return SourceRetrievalResult(status="ok", **parsed.model_dump(exclude={"snapshots"}))
 
     async def _request(
         self, method: str, path: str, **kwargs,
@@ -225,6 +366,8 @@ class SourcesClient:
         try:
             response = await self._client.request(method, path, **kwargs)
         except httpx.RequestError:
+            if self.source_mode == "snapshot":
+                record_source_gap(f"Snapshot request unavailable: {path}")
             return SourceResult(
                 status="unavailable", error="Sources service request failed",
             )
@@ -233,6 +376,8 @@ class SourcesClient:
             if version and len(version) <= MAX_VERSION_LENGTH and version != "unknown":
                 self._observe_version(version)
             return response
+        if self.source_mode == "snapshot":
+            record_source_gap(f"Snapshot request unsupported or unavailable: {path} (HTTP {response.status_code})")
         if response.status_code in {HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN}:
             status = "unauthorized"
         elif response.status_code == HTTPStatus.NOT_FOUND:
@@ -248,6 +393,9 @@ class SourcesClient:
 
     async def search(self, index: str, request: SourceSearchRequest) -> SourceResult:
         index = _INDEX.validate_python(index)
+        if self.source_mode == "snapshot":
+            record_source_gap(f"Snapshot vector search unsupported: {index}")
+            return SourceResult(status="unsupported", index_name=index, error="Snapshot vector search is unsupported")
         response = await self._request(
             "POST",
             f"v2/indices/{index}/search",
@@ -283,6 +431,9 @@ class SourcesClient:
         )
 
     async def manifest(self) -> SourceResult:
+        if self.source_mode == "snapshot":
+            record_source_gap("Direct index manifest unavailable in snapshot mode")
+            return SourceResult(status="unsupported", error="Use the snapshot manifest")
         response = await self._request("GET", "v2/manifest")
         if isinstance(response, SourceResult):
             return response

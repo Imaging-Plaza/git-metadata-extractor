@@ -70,6 +70,13 @@ class V2ModelOverride(BaseModel):
 
 
 class V2ExtractRequest(BaseModel):
+    source_mode: Literal["direct", "snapshot"] | None = Field(
+        default=None,
+        description=(
+            "Scholarly retrieval: direct/current providers or strict configured "
+            "snapshots. GitHub stays live. Defaults to V2_SOURCE_MODE (direct)."
+        ),
+    )
     source_url: str = Field(
         description="GitHub repository, user, or organization URL or handle.",
         examples=["https://github.com/sdsc-ordes/gimie"],
@@ -128,6 +135,7 @@ class V2ExtractRequest(BaseModel):
 
 
 class V2ExtractResponse(BaseModel):
+    source_mode: Literal["direct", "snapshot"] = "direct"
     source_url: str
     detected_type: Literal["repository", "user", "organization"]
     output_format: Literal["jsonld", "json"]

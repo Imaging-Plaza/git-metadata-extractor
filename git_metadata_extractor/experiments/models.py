@@ -64,6 +64,7 @@ class PipelineProfile(BaseModel):
     name: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
     version: str = "1"
     runtime: Literal["rule_based", "llm", "hybrid"] = "rule_based"
+    source_mode: Literal["direct", "snapshot"] | None = None
     collectors: list[ComponentRef] = Field(
         default_factory=lambda: [ComponentRef(component="github.context")], min_length=1,
     )

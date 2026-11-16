@@ -28,6 +28,10 @@ def main() -> int:
     benchmark.add_argument("--output", type=Path, required=True)
     benchmark.add_argument("--providers", choices=["mock", "live"], default="mock")
     benchmark.add_argument(
+        "--source-mode", choices=["direct", "snapshot"],
+        help="Override scholarly retrieval mode for every selected profile; GitHub stays live",
+    )
+    benchmark.add_argument(
         "--cache-mode", choices=["cold", "warm_pipeline"], default="cold",
     )
     benchmark.add_argument("--repeats", type=int, default=1)
@@ -54,9 +58,12 @@ def main() -> int:
             print(json.dumps(catalog.manifest(load_profile(args.profile)), indent=2))
         else:
             corpus = json.loads(args.corpus.read_text(encoding="utf-8"))
+            profiles = [load_profile(p) for p in args.profile]
+            if args.source_mode is not None:
+                profiles = [p.model_copy(update={"source_mode": args.source_mode}) for p in profiles]
             report = asyncio.run(
                 run_benchmark(
-                    [load_profile(p) for p in args.profile],
+                    profiles,
                     [BenchmarkCase.model_validate(c) for c in corpus["cases"]],
                     output_dir=args.output,
                     catalog=catalog,

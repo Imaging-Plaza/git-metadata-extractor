@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from typing import Literal, cast
 
 from pydantic import Field
 
@@ -9,6 +10,16 @@ from git_metadata_extractor.models import InternalModel
 
 TRUE_ENV_VALUES = {"1", "true", "t", "yes", "y", "on"}
 FALSE_ENV_VALUES = {"0", "false", "f", "no", "n", "off"}
+SourceMode = Literal["direct", "snapshot"]
+
+
+def resolve_source_mode(value: SourceMode | None = None) -> SourceMode:
+    """Resolve scholarly retrieval mode without mutating process configuration."""
+    selected = os.getenv("V2_SOURCE_MODE", "direct") if value is None else value
+    if selected not in {"direct", "snapshot"}:
+        message = "V2_SOURCE_MODE/source_mode must be 'direct' or 'snapshot'"
+        raise ValueError(message)
+    return cast("SourceMode", selected)
 
 
 def _get_env_bool(name: str, *, default_value: bool) -> bool:
@@ -118,6 +129,7 @@ def substrate_store_timeout_seconds() -> float:
 
 
 class V2Config(InternalModel):
+    V2_SOURCE_MODE: SourceMode = Field(default_factory=resolve_source_mode)
     V2_AGENT_RUNTIME_DEFAULT: AgentRuntime = Field(
         default_factory=lambda: parse_agent_runtime(
             os.getenv("V2_AGENT_RUNTIME_DEFAULT"),

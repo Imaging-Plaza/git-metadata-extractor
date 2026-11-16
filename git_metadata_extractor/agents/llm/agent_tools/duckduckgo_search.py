@@ -7,6 +7,7 @@ import requests
 from pydantic_ai import Tool
 
 from git_metadata_extractor.observation.query_log import record_query
+from git_metadata_extractor.providers import sources_service
 
 if TYPE_CHECKING:
     from git_metadata_extractor.providers.cache import ProviderCache
@@ -203,6 +204,14 @@ def make_duckduckgo_search_tool(
             max_results: Max result rows to return (1..10).
         """
 
+        if sources_service.current_source_mode() == "snapshot":
+            sources_service.record_source_gap("snapshot: live internet search is unavailable")
+            return {
+                "query": _to_non_empty_string(query) or "",
+                "result_count": 0,
+                "results": [],
+                "error": "snapshot_operation_unsupported",
+            }
         normalized_query = _to_non_empty_string(query) or ""
         logger.info(
             "tool call: search_on_the_internet — query=%r max_results=%r",

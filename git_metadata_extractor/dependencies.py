@@ -4,11 +4,15 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from typing import Annotated
 
 from fastapi import Depends, Request
+from fastapi.exceptions import RequestValidationError
+from pydantic import TypeAdapter, ValidationError
 
 from git_metadata_extractor.agents import ProviderSet
+from git_metadata_extractor.config import SourceMode, resolve_source_mode
 from git_metadata_extractor.providers.detection import (
     UnsupportedGitHubURL,
     classify_github_url,
@@ -41,8 +45,31 @@ def _is_repository_extract_request(request: Request) -> bool:
 
 
 async def get_provider_set(request: Request) -> ProviderSet:
+    location = "query"
+    selected = request.query_params.get("source_mode")
+    if request.method == "POST" and request.url.path.rstrip("/") == "/v2/extract":
+        location = "body"
+        # Starlette caches JSON/body reads, so FastAPI and the route retain the body.
+        try:
+            payload = await request.json()
+        except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+            raise RequestValidationError([{
+                "type": "json_invalid", "loc": ("body",),
+                "msg": "A JSON extraction request is required", "input": None,
+            }]) from exc
+        selected = payload.get("source_mode") if isinstance(payload, dict) else None
+    try:
+        mode = TypeAdapter(SourceMode | None).validate_python(selected)
+    except ValidationError as exc:
+        raise RequestValidationError([
+            {**error, "loc": (location, "source_mode", *error["loc"])}
+            for error in exc.errors()
+        ]) from exc
+    resolved_mode = resolve_source_mode(mode)
+    request.state.v2_source_mode = resolved_mode
     resources = build_provider_resources(
         request.app.state,
+        source_mode=resolved_mode,
         repository_scope=False
         if isinstance(getattr(request.app.state, "v2_provider_set", None), ProviderSet)
         else _is_repository_extract_request(request),

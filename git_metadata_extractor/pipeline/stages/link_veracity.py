@@ -16,6 +16,7 @@ from git_metadata_extractor.canonicalization.id_resolution import (
 )
 from git_metadata_extractor.models import InternalModel
 from git_metadata_extractor.pipeline.stages.models import AssembledOutput
+from git_metadata_extractor.providers import sources_service
 
 if TYPE_CHECKING:
     from git_metadata_extractor.providers.cache import ProviderCache
@@ -618,6 +619,10 @@ async def run_link_veracity_stage(
     entities: list[dict[str, Any]] | None = None,
     cache: ProviderCache | None = None,
 ) -> LinkVeracityStageResult:
+    if sources_service.current_source_mode() == "snapshot":
+        message = "link_veracity: live URL verification skipped in snapshot mode"
+        sources_service.record_source_gap(message)
+        return LinkVeracityStageResult(warnings=[message])
     entity_link_map: dict[str, set[str]] = {}
     article_identifier_link_map: dict[str, str] = {}
     if entities is not None:

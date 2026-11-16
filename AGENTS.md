@@ -19,6 +19,20 @@ deliberately and validate the pairing; even a documentation commit changes the
 revision checked by `just sources-check`. Publishing sources must precede remote
 CI fetching its revision. See `docs/cross-repo-contract.md` for release order.
 
+## Scholarly source selection
+
+`source_mode=direct|snapshot` selects the scholarly provider backend per
+extraction/profile; `V2_SOURCE_MODE` supplies the default (`direct`). GitHub
+collection remains live. Snapshot mode is strict: never silently fall back to
+live scholarly APIs, browser/search tools, or their cached results. Rete files,
+query mappings and execution belong exclusively to sources; GME uses its
+authenticated `/v2/snapshots/*` HTTP endpoints. See `docs/snapshot-sources.md`.
+The manifest is read before pipeline-cache lookup, and observed dataset
+identities feed run reports and substrate provenance. Preserve those identities
+when adding caches; individual LLM verdict caching is disabled in snapshot mode
+until historical snapshot observations can be replayed. Missing or conflicting
+dataset identity must prevent caching an extraction as a complete result.
+
 ## What this tool is
 
 A FastAPI service that turns a GitHub URL (repository / user / org) into

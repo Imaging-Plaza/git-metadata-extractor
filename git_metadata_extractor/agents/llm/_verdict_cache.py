@@ -27,7 +27,10 @@ from git_metadata_extractor.agents.tool_catalog import current_tool_fingerprint
 from git_metadata_extractor.mapping import mapping_manifest
 from git_metadata_extractor.observation.evidence import get_trace
 from git_metadata_extractor.providers.cache import ProviderCache
-from git_metadata_extractor.providers.sources_service import current_sources_fingerprint
+from git_metadata_extractor.providers.sources_service import (
+    current_source_mode,
+    current_sources_fingerprint,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +46,9 @@ def get_cached_agent_verdict(
 
     Root extractions never hit the cache — see module docstring.
     """
-    if cache is None or not identity or is_root:
+    # Verdict packets do not retain the snapshot identities actually queried.
+    # Re-run snapshot agents until that historical observation can be replayed.
+    if cache is None or not identity or is_root or current_source_mode() == "snapshot":
         return None
     key = _verdict_key(agent_name, identity)
     cached = cache.get(key)
@@ -88,7 +93,7 @@ def store_agent_verdict(
     result: AgentResult,
 ) -> None:
     """Cache `result` for future lookups when it is complete and identifiable."""
-    if cache is None or not identity or result.is_partial:
+    if cache is None or not identity or result.is_partial or current_source_mode() == "snapshot":
         return
     key = _verdict_key(agent_name, identity)
     trace = get_trace()

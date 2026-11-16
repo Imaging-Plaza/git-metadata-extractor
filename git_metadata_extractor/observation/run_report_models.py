@@ -7,6 +7,7 @@ from typing import Literal
 from pydantic import Field, NonNegativeFloat, NonNegativeInt
 
 from git_metadata_extractor.models import DataModel
+from git_metadata_extractor.providers.sources_service import SnapshotDescriptor
 
 StagePhase = Literal["generation", "post_processing"]
 StageStatus = Literal["completed", "partial", "failed", "skipped", "cancelled"]
@@ -111,6 +112,8 @@ class AttributionSummary(DataModel):
 
 class RunReport(DataModel):
     schema_version: Literal[1] = 1
+    source_mode: Literal["direct", "snapshot"] = "direct"
+    source_snapshots: list[SnapshotDescriptor] = Field(default_factory=list)
     request_run_id: str
     output_run_id: str | None
     runtime: Runtime

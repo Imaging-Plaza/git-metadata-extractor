@@ -68,6 +68,7 @@ nav:
   # https://github.com/sdsc-ordes/open-pulse-sources — only the read-side
   # (RAG tools the extraction pipeline consumes) is documented here.
   - RAG (read side):
+      - Direct Sources and Snapshots: snapshot-sources.md
       - V2 Agent RAG Tools: v2-rag-tools.md
       - Concept Tagging Stage: concept-tagging.md
   - Ontology:

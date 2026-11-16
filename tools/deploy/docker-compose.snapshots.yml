@@ -1,0 +1,19 @@
+# Optional read-only mounts. Combine with docker-compose.yml; do not use alone.
+# Set SNAPSHOT_DATA_DIR and SNAPSHOT_REGISTRY_FILE to existing host paths.
+services:
+  gme-sources:
+    environment:
+      SNAPSHOT_REGISTRY_PATH: /app/config/local-snapshots.yaml
+    volumes:
+      - type: bind
+        source: ${SNAPSHOT_DATA_DIR:?Set SNAPSHOT_DATA_DIR to existing Rete files}
+        target: /snapshots
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${SNAPSHOT_REGISTRY_FILE:?Set SNAPSHOT_REGISTRY_FILE to your snapshot registry YAML}
+        target: /app/config/local-snapshots.yaml
+        read_only: true
+        bind:
+          create_host_path: false

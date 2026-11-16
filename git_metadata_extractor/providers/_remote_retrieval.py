@@ -8,6 +8,7 @@ import os
 from git_metadata_extractor.providers.sources_service import (
     SourcesClient,
     current_sources_client,
+    record_source_gap,
 )
 
 logger = logging.getLogger(__name__)
@@ -28,6 +29,8 @@ class RemoteRetrievalProvider:
             return empty
         result = await client.retrieve(self.provider_name, method, payload)
         if result.status != "ok" or not isinstance(result.data, type(empty)):
+            if getattr(client, "source_mode", "direct") == "snapshot":
+                record_source_gap(f"Snapshot retrieval unavailable or invalid: {self.provider_name}.{method}")
             logger.warning(
                 "Sources retrieval %s.%s unavailable (%s)",
                 self.provider_name,

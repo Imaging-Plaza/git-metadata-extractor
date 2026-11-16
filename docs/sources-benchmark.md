@@ -60,6 +60,11 @@ additional model workload.
 
 ## Read the artifacts
 
+To compare the existing providers with local Rete exports, add
+`--source-mode direct` or `--source-mode snapshot` and use a fresh output
+directory for each run. Profiles can also set `source_mode`. See
+[Direct sources and snapshots](snapshot-sources.md) for coverage and Docker mounts.
+
 - `manifest.json`: profiles, source URLs, execution fingerprints and settings.
 - `<profile>/<case>/<repeat>/result.json`: retained graph, warnings, provenance,
   optional substrate and run report.

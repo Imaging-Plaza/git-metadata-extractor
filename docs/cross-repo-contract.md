@@ -61,6 +61,7 @@ writers; it does not make multi-process DuckDB writes safe.
 | `SOURCES_API_URL` | Service root, e.g. `http://gme-sources:8080` |
 | `SOURCES_API_TOKEN` | Bearer credential matching the sources service's `API_TOKEN` |
 | `SOURCES_API_TIMEOUT_SECONDS` | HTTP timeout, default 30 seconds, maximum 300 |
+| `V2_SOURCE_MODE` | Default `direct`; `snapshot` selects strict read-only Rete retrieval through sources |
 
 Compose uses `SOURCES_API_TOKEN`, falling back to `API_TOKEN` if no separate
 credential is supplied. Source-specific tokens, Qdrant URLs, index paths and

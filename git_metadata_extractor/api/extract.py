@@ -29,6 +29,7 @@ from git_metadata_extractor.api_models import (
     V2ExtractResponse,
 )
 from git_metadata_extractor.auth import verify_token
+from git_metadata_extractor.config import resolve_source_mode
 from git_metadata_extractor.dependencies import (
     defer_provider_resources,
     provider_dependency,
@@ -110,6 +111,7 @@ async def _run_extract_job(  # noqa: C901, PLR0915 - explicit job lifecycle
             request=request,
             output_format=payload.output_format,
             agent_runtime=payload.agent_runtime,
+            source_mode=payload.source_mode,
             include_context_summary=payload.include_context_summary,
             include_internal_fields=payload.include_internal_fields,
             include_run_report=payload.include_run_report,
@@ -203,6 +205,10 @@ async def extract(  # noqa: PLR0913
     agent_runtime: Annotated[
         Literal["rule_based", "llm", "hybrid"] | None, Query(),
     ] = None,
+    source_mode: Annotated[
+        Literal["direct", "snapshot"] | None,
+        Query(description="Scholarly retrieval mode; GitHub stays live."),
+    ] = None,
     include_context_summary: Annotated[bool, Query()] = False,
     include_run_report: Annotated[
         bool, Query(description="Attach the optional execution and observability report."),
@@ -228,6 +234,7 @@ async def extract(  # noqa: PLR0913
         request=request,
         providers=providers,
         agent_runtime=agent_runtime,
+        source_mode=source_mode,
         output_format=output_format,
         include_context_summary=include_context_summary,
         include_internal_fields=include_internal_fields,
@@ -245,10 +252,13 @@ async def _extract_for_request(  # noqa: PLR0913 - public route options
     include_context_summary,
     include_internal_fields,
     include_run_report=False,
+    source_mode=None,
 ):
     options = ExtractionOptions(
         source_url=full_path,
         agent_runtime=agent_runtime,
+        source_mode=getattr(request.state, "v2_source_mode", None)
+        or resolve_source_mode(source_mode),
         output_format=output_format,
         include_context_summary=include_context_summary,
         include_internal_fields=include_internal_fields,
@@ -345,7 +355,11 @@ async def extract_post(
     job_id = str(uuid4())
     submitted_at = datetime.now(timezone.utc)
     normalized_payload = payload.model_copy(
-        update={"source_url": classification.normalized_url},
+        update={
+            "source_url": classification.normalized_url,
+            "source_mode": getattr(request.state, "v2_source_mode", None)
+            or resolve_source_mode(payload.source_mode),
+        },
     )
     job = V2ExtractJob(
         job_id=job_id,

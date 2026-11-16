@@ -436,3 +436,10 @@ The most-touched knobs (full list in `.env.example` and `AGENTS.md`):
 | `SELENIUM_REMOTE_URL` | unset | Enables link-veracity + the `fetch_link_content_via_selenium` tool |
 | `GIMIE_API_URL` | unset | **Required for repository extraction.** Points at the `gimie-api` sidecar (e.g. `http://gme-gimie-api:15400`); the `gimie` package was removed from the image. Unset → in-process gimie, which is no longer installed → `RuntimeError`. See [operations runbook §8](OPERATIONS_RUNBOOK.md#8-gimie-now-runs-as-a-sidecar-gimie_api_url-is-required). |
 | `GIMIE_API_TIMEOUT_SECONDS` | `180` | Per-request timeout for the gimie-api sidecar call. |
+
+## Direct providers and local snapshots
+
+Both extraction methods accept `source_mode: direct | snapshot`. Omission uses
+`V2_SOURCE_MODE` (default `direct`); jobs retain the selected value. Snapshot mode
+uses local Rete exports through the sources service and keeps GitHub collection
+live. Responses include the resolved mode. See [snapshot setup and limitations](snapshot-sources.md).

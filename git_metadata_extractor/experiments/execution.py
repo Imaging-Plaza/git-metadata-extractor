@@ -25,6 +25,7 @@ from git_metadata_extractor.agents.llm.runtime import (
 )
 from git_metadata_extractor.agents.tool_catalog import tool_scope
 from git_metadata_extractor.api_models import V2ExtractResponse
+from git_metadata_extractor.config import resolve_source_mode
 from git_metadata_extractor.experiments.builtins import default_catalog
 from git_metadata_extractor.experiments.catalog import ComponentCatalog, selected_model
 from git_metadata_extractor.mapping import mapping_manifest
@@ -83,6 +84,7 @@ def code_fingerprint() -> str:
 
 
 def execution_manifest(catalog, profile, provider_mode):
+    profile = profile.model_copy(update={"source_mode": resolve_source_mode(profile.source_mode)})
     manifest = catalog.manifest(profile)
     public_keys = {
         "model",
@@ -163,6 +165,7 @@ async def _run_profile(  # noqa: C901, PLR0913 - scoped extraction lifecycle
     if provider_mode not in {"mock", "live"}:
         msg = "provider_mode must be mock or live"
         raise ValueError(msg)
+    profile = profile.model_copy(update={"source_mode": resolve_source_mode(profile.source_mode)})
     classification = classify_github_url(source_url, probe_accounts=False)
     catalog = catalog or default_catalog()
     catalog.validate(profile)
@@ -206,6 +209,7 @@ async def _run_profile(  # noqa: C901, PLR0913 - scoped extraction lifecycle
         use_mock=provider_mode == "mock",
         repository_scope=classification.detected_type == GitHubURLType.REPOSITORY,
         include_rag=provider_mode == "live",
+        source_mode=profile.source_mode,
     )
     bundle = resources.bundle
     previous_log = query_log_var.set(None)
@@ -231,6 +235,7 @@ async def _run_profile(  # noqa: C901, PLR0913 - scoped extraction lifecycle
                 ExtractionOptions(
                     source_url=source_url,
                     agent_runtime=profile.runtime,
+                    source_mode=profile.source_mode,
                     include_context_summary=True,
                     include_run_report=include_run_report,
                     read_only=True,

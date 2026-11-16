@@ -301,10 +301,16 @@ def _attribution(trace: EvidenceTrace, run_id: str) -> AttributionSummary:
 def build_run_report(
     *, output_run_id: str | None, status: ReportStatus, warning_count: int = 0,
 ) -> RunReport | None:
+    from git_metadata_extractor.providers.sources_service import (  # noqa: PLC0415 - observation/provider initialization cycle
+        current_source_mode,
+        current_source_snapshots,
+    )
+
     recorder = _recorder.get()
     if recorder is None or recorder.run_id is None:
         return None
     report = RunReport(
+        source_mode=current_source_mode(), source_snapshots=current_source_snapshots(),
         request_run_id=recorder.run_id, output_run_id=output_run_id,
         runtime=recorder.runtime, status=status,
         elapsed_ms=round((perf_counter() - recorder.started) * 1000, 3),

@@ -641,6 +641,13 @@ def _link_veracity_applies(state: PipelineState) -> bool:
     if not _gate("_is_link_veracity_enabled")(state):
         logger.info("link_veracity: skipped (V2_LINK_VERACITY_ENABLED=false)")
         return False
+    from git_metadata_extractor.providers import sources_service  # noqa: PLC0415
+
+    if sources_service.current_source_mode() == "snapshot":
+        message = "link_veracity: live URL verification skipped in snapshot mode"
+        sources_service.record_source_gap(message)
+        state.warn(message)
+        return False
     return True
 
 

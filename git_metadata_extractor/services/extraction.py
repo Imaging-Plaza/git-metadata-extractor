@@ -59,6 +59,8 @@ from git_metadata_extractor.providers.detection import (
 )
 from git_metadata_extractor.providers.detection.models import GitHubURLClassification
 from git_metadata_extractor.providers.sources_service import (
+    current_source_gaps,
+    current_source_mode,
     current_sources_fingerprint,
     sources_scope,
 )
@@ -69,6 +71,7 @@ logger = logging.getLogger(__name__)
 
 class ExtractionOptions(InternalModel, frozen=True):
     source_url: str
+    source_mode: runtime_config.SourceMode | None = None
     agent_runtime: Literal["rule_based", "llm", "hybrid"] | None = None
     output_format: Literal["jsonld", "json"] = "jsonld"
     include_context_summary: bool = False
@@ -99,10 +102,18 @@ async def execute_extraction(  # noqa: PLR0913 - explicit dependencies
     execution_profile: dict | None = None,
     classification: GitHubURLClassification | None = None,
 ) -> ExtractionResult:
+    from git_metadata_extractor.providers.runtime import (  # noqa: PLC0415 - provider composition initialization cycle
+        validate_provider_source_mode,
+    )
+
+    source_mode = runtime_config.resolve_source_mode(options.source_mode)
+    validate_provider_source_mode(providers, source_mode)
     with report_scope(options.include_run_report):
         token = query_log_var.set(None)
         try:
             with sources_scope(providers.sources):
+                if source_mode == "snapshot":
+                    await providers.sources.prepare_snapshots()
                 try:
                     result = await _execute(
                         options,
@@ -223,6 +234,7 @@ async def _execute(  # noqa: C901, PLR0912, PLR0913, PLR0915 - preserve relocate
         pipeline_cache = None
     pipeline_cache_enabled = (
         pipeline_cache is not None and settings.is_pipeline_cache_enabled()
+        and not current_source_gaps()
     )
     pipeline_cache_key: str | None = None
     if pipeline_cache_enabled:
@@ -497,11 +509,12 @@ async def _execute(  # noqa: C901, PLR0912, PLR0913, PLR0915 - preserve relocate
 
     response_model = V2ExtractResponse(
         source_url=classification.normalized_url,
+        source_mode=current_source_mode(),
         detected_type=classification.detected_type.value,
         output_format=output_format,
         output=response_output,
         context_summary_markdown=context_summary_markdown,
-        warnings=warnings,
+        warnings=[*warnings, *current_source_gaps()],
         stats=stats,
         extraction_run=pipeline_state.artifacts.extraction_run,
         provenance=pipeline_state.artifacts.provenance,
@@ -512,6 +525,7 @@ async def _execute(  # noqa: C901, PLR0912, PLR0913, PLR0915 - preserve relocate
     if (
         pipeline_cache is not None
         and pipeline_cache_key is not None
+        and not current_source_gaps()
         and not _has_degraded_contributor_coverage(gathered_context)
         and not any(
             result.stats.get("unavailable_providers")

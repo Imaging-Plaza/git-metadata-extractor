@@ -33,6 +33,7 @@ checks that against the real TTL rather than trusting this docstring.
 from __future__ import annotations
 
 import logging
+from hashlib import sha256
 from typing import TYPE_CHECKING, Any
 
 from git_metadata_extractor.mapping import load_policy, map_fields
@@ -48,7 +49,11 @@ from git_metadata_extractor.pipeline.stages.canonical_projection import (
     profile_iri,
 )
 from git_metadata_extractor.pipeline.stages.source_attribution import split_by_source
-from git_metadata_extractor.providers.sources_service import current_sources_version
+from git_metadata_extractor.providers.sources_service import (
+    current_source_mode,
+    current_source_snapshots,
+    current_sources_version,
+)
 from git_metadata_extractor.validation.metadata import strip_internal_metadata
 
 _ONTOLOGY_POLICY = load_policy("policies.ontology")
@@ -121,6 +126,19 @@ def source_snapshot_iri(platform: str, version: str) -> str:
 
 def source_snapshot(platform: str) -> dict[str, Any] | None:
     """The `pulse:SourceSnapshot` an output `prov:used`, when there is one."""
+    if current_source_mode() == "snapshot":
+        slug = platform.removeprefix("pulse:").lower()
+        snapshot = next((item for item in current_source_snapshots() if item.source == slug), None)
+        if platform not in _INDEX_BACKED or snapshot is None:
+            return None
+        identity = sha256(snapshot.model_dump_json().encode()).hexdigest()
+        return {
+            "@id": source_snapshot_iri(platform, identity),
+            "@type": "pulse:SourceSnapshot",
+            "schema:name": snapshot.id,
+            "schema:softwareVersion": snapshot.version,
+            "pulse:platform": platform,
+        }
     version = index_version()
     if platform not in _INDEX_BACKED or not version:
         return None

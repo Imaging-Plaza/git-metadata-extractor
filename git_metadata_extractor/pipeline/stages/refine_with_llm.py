@@ -76,6 +76,7 @@ from git_metadata_extractor.pipeline.stages.models import ReconciledEntities
 from git_metadata_extractor.pipeline.stages.reconciliation import (
     normalize_organization_identifiers,
 )
+from git_metadata_extractor.providers import sources_service
 
 if TYPE_CHECKING:
     from git_metadata_extractor.providers.epfl_graph_rag import EpflGraphRagProvider
@@ -564,6 +565,9 @@ def _openalex_lookup_doi(bare_doi: str) -> dict[str, Any] | None:
     Or None on any failure (network, 404, malformed). The article
     materialiser drops the proposal when this is None.
     """
+    if sources_service.current_source_mode() == "snapshot":
+        sources_service.record_source_gap("snapshot: OpenAlex DOI enrichment is unavailable")
+        return None
     mailto = os.environ.get("OPENALEX_MAILTO", "").strip()
     url = f"{_OPENALEX_BASE_URL}/works/doi:{bare_doi}"
     params = {"mailto": mailto} if mailto else None

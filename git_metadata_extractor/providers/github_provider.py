@@ -1791,6 +1791,8 @@ class RealGitHubProvider(GitHubProvider):
         return date if isinstance(date, str) else None, count
 
     def get_user(self, username: str) -> dict[str, Any]:
+        from git_metadata_extractor.providers import sources_service  # noqa: PLC0415
+
         def _fetch() -> dict[str, Any]:
             try:
                 return self._run_with_rate_limit(
@@ -1799,6 +1801,20 @@ class RealGitHubProvider(GitHubProvider):
             except ValueError as exc:
                 raise ProviderNotFoundError(str(exc)) from exc
 
+        if sources_service.current_source_mode() == "snapshot":
+            # Historical GitHub cache entries can contain ORCID page content.
+            # Keep GitHub facts and the profile's ORCID link, never that enrichment.
+            payload = _fetch() if self._cache is None else self._cache.get_or_set(
+                ProviderCache.make_key(
+                    "github", "get_user", username=username,
+                    include_repositories=self._include_user_repositories,
+                    source_mode="snapshot",
+                ),
+                _fetch, label=f"github.get_user({username})",
+            )
+            if payload.get("orcid_activities") is not None:
+                sources_service.record_source_gap("snapshot: live ORCID activity content excluded from GitHub metadata")
+            return {**payload, "orcid_activities": None}
         if self._cache is None:
             return _fetch()
         key = ProviderCache.make_key(

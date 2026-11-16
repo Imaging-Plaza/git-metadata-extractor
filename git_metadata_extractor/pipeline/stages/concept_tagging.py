@@ -49,6 +49,7 @@ import requests
 from pydantic import Field
 
 from git_metadata_extractor.models import InternalModel
+from git_metadata_extractor.providers import sources_service
 from git_metadata_extractor.providers.sources_service import current_sources_client
 
 logger = logging.getLogger(__name__)
@@ -228,6 +229,9 @@ def _candidate_keywords_from_text(text: str, limit: int) -> list[str]:
 def _wikipedia_lookup(
     keyword: str, *, session: requests.Session, timeout: float = 10.0,
 ) -> dict[str, Any] | None:
+    if sources_service.current_source_mode() == "snapshot":
+        sources_service.record_source_gap("snapshot: live Wikipedia concept retrieval is unavailable")
+        return None
     try:
         response = session.get(
             "https://en.wikipedia.org/w/api.php",
@@ -429,6 +433,12 @@ async def run_concept_tagging_stage(  # noqa: PLR0913
     """
     backend_normalized = (backend or DEFAULT_BACKEND).strip().lower()
     result = ConceptTaggingResult(backend=backend_normalized)
+
+    if sources_service.current_source_mode() == "snapshot" and backend_normalized == BACKEND_WIKIPEDIA:
+        message = "concept_tagging: live Wikipedia retrieval skipped in snapshot mode"
+        sources_service.record_source_gap(message)
+        result.warnings.append(message)
+        return root_entity, result
 
     if backend_normalized not in SUPPORTED_BACKENDS:
         result.warnings.append(

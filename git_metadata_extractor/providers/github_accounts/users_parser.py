@@ -20,6 +20,7 @@ from selenium.webdriver.firefox.options import Options as FirefoxOptions
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
+from git_metadata_extractor.providers import sources_service
 from git_metadata_extractor.providers.github_token_pool import github_auth_headers
 
 from .user_models import (
@@ -232,6 +233,9 @@ class GitHubUsersParser:
         Returns:
             ORCIDActivities object with employment and education data
         """
+        if sources_service.current_source_mode() == "snapshot":
+            sources_service.record_source_gap("snapshot: live ORCID activity scraping is unavailable")
+            return None
         driver = None
         try:
             orcid_url = f"https://orcid.org/{orcid_id}"
